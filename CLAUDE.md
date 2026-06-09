@@ -150,6 +150,32 @@ the URL headless and screenshot the canvas as objective confirmation.
   off slightly). Proper fix: drive fullscreen through one path (likely disable the engine
   SDL fullscreen on web and resize the canvas buffer to the screen so SDL letterboxes
   internally), keeping mouse coords exact.
+- **Mobile / tablet mode (DONE 2026-06-09; engine patch `0007` + `web/shell.html`).** The shell
+  OWNS touch input: it maps the screen point → logical 800×600 (rotation- and letterbox-aware) and
+  injects via `web_pointer_move/_button`, `web_scroll_gesture/_end`, `web_key_press` (all `#ifdef
+  __EMSCRIPTEN__` in `OSYS.cpp`, `EMSCRIPTEN_KEEPALIVE`+ccall, calling the same `Mouse` methods the
+  SDL pump uses). `OVGA.cpp` sets `SDL_HINT_TOUCH_MOUSE_EVENTS/MOUSE_TOUCH_EVENTS=0` so taps don't
+  double-fire. Gestures: tap=LMB, long-press 400ms=RMB, 1-finger drag=box-select, 2-finger
+  drag=scroll. Auto-rotate in portrait + a `#rotbtn` override; `#menubtn` sends ESC. All gated on a
+  `body.mobile` latch (`pointer:coarse` / first touch) → **zero desktop impact**.
+- **DO LATER — on-screen hotkey palette (investigated 2026-06-09, NOT built).** Idea: tappable
+  buttons firing 7kaa hotkeys via `web_key_press(sdlKeysym)` (goto-king/general, object next/prev,
+  map-mode cycle, save/load, options…). **Blocker:** those are all `KEYEVENT_*` (enum
+  `include/OMOUSE.h:47`), and `KEYEVENT_*` get bound ONLY by `bindkey = KEYEVENT_X,<key>` lines in
+  `config.txt` — the single `mouse.bind_key()` call (`ConfigAdv.cpp:298`, via `set("bindkey",…)` /
+  `read_key()` ~`:569`). `config.txt` loads from `SKCONFIG` (`/saves`) in `ConfigAdv::init`→`load`
+  (`ConfigAdv.cpp:145`), is **optional**, and the web build ships none → `reset()` binds nothing →
+  **no default in-game hotkeys** (true on desktop web too). The only hardcoded keys
+  (`OVGA.cpp:516–557`) are Alt+Enter/F4/Tab + Ctrl+G/M — system-level, useless for gameplay. ESC
+  works because it's handled directly (that's what `#menubtn` uses). To ship a palette you must
+  ALSO ship a default keymap: write a `config.txt` to `/saves` on first boot (only if absent) with
+  `bindkey` lines, then point the buttons at those keysyms (`add_key_event` sets `scan_code` to the
+  keysym; `is_key_event(KeyEventType)`/`ISKEY` matches it against the bound key — cf.
+  `OGAMMAIN.cpp:305` `scan_code=='r'`). **Caveat:** the `Mouse::bind_key`/`get_key_code`
+  *definitions* weren't found in `src/` (only declared `OMOUSE.h:302–304`, called in
+  `ConfigAdv.cpp`) — pin the `bindkey` value-string format before writing `config.txt`. Skipped:
+  the tablet build is fully playable via gestures + the ESC button, those actions are reachable by
+  tapping in-game UI, and enabling default hotkeys is a behavior change needing sign-off.
 
 ## Engine module map (`upstream/src`, `O*` = "object" classes)
 
