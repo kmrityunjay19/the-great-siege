@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Seven Kingdoms: Ancient Adversaries — Web</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; color: #cbb88a;
+      font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
+    #wrap { position: relative; width: 100vw; height: 100vh; }
+    /* The engine renders to an 800x600 buffer; scale the element to fill the whole
+       viewport, letterboxed + centered, without blurring the pixel art. */
+    canvas { position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: contain; background: #000;
+      image-rendering: pixelated; outline: none; display: block; }
+    #status { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center;
+      font-size: 13px; min-height: 1.2em; z-index: 2; pointer-events: none; }
+    #bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 32px;
+      width: 320px; height: 6px; background: #222; border: 1px solid #444;
+      display: none; z-index: 2; }
+    #bar > div { height: 100%; width: 0; background: #cbb88a; }
+    /* In-game fullscreen toggle. Lives OUTSIDE #wrap so the browser hides it
+       automatically while #wrap is fullscreen (Esc exits fullscreen). */
+    #fsbtn { position: fixed; top: 10px; right: 12px; z-index: 10;
+      width: 34px; height: 34px; padding: 0; font-size: 17px; line-height: 32px;
+      text-align: center; color: #d8c79a; background: rgba(28,24,16,0.78);
+      border: 1px solid #7a6b4d; border-radius: 5px; cursor: pointer;
+      opacity: 0.7; transition: opacity .15s; }
+    #fsbtn:hover { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="status">Loading…</div>
+    <div id="bar"><div id="barfill"></div></div>
+  </div>
+  <button id="fsbtn" type="button" title="Fullscreen (Esc to exit)" aria-label="Toggle fullscreen">⛶</button>
+  <script>
+    var statusEl = document.getElementById('status');
+    var barEl = document.getElementById('bar');
+    var barFill = document.getElementById('barfill');
+    var Module = {
+      canvas: (function () {
+        var c = document.getElementById('canvas');
+        c.addEventListener('webglcontextlost', function (e) {
+          alert('WebGL context lost. Reload the page.'); e.preventDefault();
+        }, false);
+        return c;
+      })(),
+      // The engine locates its assets via SKDATA (preloaded at /data) and writes
+      // saves/config to SKCONFIG. Point SKCONFIG at an IndexedDB-backed dir so saves
+      // and settings survive a page reload. syncfs(true) loads existing saves before
+      // the engine starts (gated by a run dependency so boot waits for it).
+      preRun: [function () {
+        ENV.SKDATA = '/data';
+        ENV.SKCONFIG = '/saves';
+        // Multiplayer (M5): the WebSocket transport reads the relay URL from
+        // KAA_RELAY. Priority: #relay=<url> in the page hash > localStorage
+        // 'kaa_relay' > a default on this host:8090.
+        try {
+          var relay = '';
+          var m = (location.hash || '').match(/relay=([^&]+)/);
+          if (m) relay = decodeURIComponent(m[1]);
+          if (!relay) relay = localStorage.getItem('kaa_relay') || '';
+          if (!relay) relay = 'ws://' + (location.hostname || 'localhost') + ':8090';
+          ENV.KAA_RELAY = relay;
+        } catch (e) { ENV.KAA_RELAY = 'ws://localhost:8090'; }
+        try {
+          FS.mkdir('/saves');
+          FS.mount(IDBFS, {}, '/saves');
+          addRunDependency('syncfs-load');
+          FS.syncfs(true, function (err) {
+            if (err) console.warn('IDBFS load error:', err);
+            removeRunDependency('syncfs-load');
+          });
+        } catch (e) { console.warn('IDBFS setup failed:', e); }
+      }],
+      print: function (t) { console.log(t); },
+      printErr: function (t) { console.error(t); },
+      setStatus: function (text) {
+        statusEl.textContent = text || '';
+        var m = text && text.match(/([^(]+)\((\d+(\.\d+)?)\/(\d+)\)/);
+        if (m) {
+          barEl.style.display = 'block';
+          barFill.style.width = (parseFloat(m[2]) / parseFloat(m[4]) * 100) + '%';
+        } else if (!text) {
+          barEl.style.display = 'none';
+        }
+      },
+      totalDependencies: 0,
+      monitorRunDependencies: function () {},
+      // Once the engine is up and core assets are mounted, stream the optional
+      // content (encyclopedia, scenarios, tutorial) in the background so the
+      // initial download stays small but those screens still work shortly after.
+      onRuntimeInitialized: function () {
+        var s = document.createElement('script');
+        s.src = 'extras.js';
+        s.onerror = function () { console.warn('extras package failed to load'); };
+        document.body.appendChild(s);
+        // The engine detected its data dirs at boot, BEFORE extras.data mounted, so
+        // ENCYC/SCENARIO/TUTORIAL/MUSIC came up empty. Wait for the bundle to mount,
+        // then have the engine re-detect them (re-enables encyclopedia, scenarios,
+        // tutorial and music for the rest of the session).
+        var rescanIv = setInterval(function () {
+          try {
+            if (FS.analyzePath('/data/SCENARIO/7FOR7.SCN').exists) {
+              clearInterval(rescanIv);
+              Module.ccall('web_rescan_data_dirs', null, [], []);
+              Module.setStatus('');   // clear the "Downloading data" overlay/progress bar
+              console.log('extras mounted — data dirs re-detected');
+            }
+          } catch (e) {}
+        }, 250);
+        // Edge-scroll backstop: tell the engine when the pointer leaves/enters the
+        // canvas (SDL window events can be flaky in-browser), so the map stops
+        // scrolling when the cursor moves to another monitor.
+        try {
+          var cv = Module.canvas;
+          cv.addEventListener('mouseleave', function () {
+            try { Module.ccall('web_set_pointer_in_window', null, ['number'], [0]); } catch (e) {}
+          });
+          cv.addEventListener('mouseenter', function () {
+            try { Module.ccall('web_set_pointer_in_window', null, ['number'], [1]); } catch (e) {}
+          });
+        } catch (e) {}
+        // Flush IndexedDB-backed saves periodically and when the tab is hidden, so
+        // a save written by the engine survives a reload / tab close.
+        var flush = function () { try { FS.syncfs(false, function () {}); } catch (e) {} };
+        setInterval(flush, 5000);
+        document.addEventListener('visibilitychange', function () {
+          if (document.hidden) flush();
+        });
+      }
+    };
+    Module.setStatus('Downloading…');
+    window.onerror = function () { Module.setStatus('Exception — see console.'); };
+    // Fullscreen toggle. Fullscreen the #wrap container so the canvas's
+    // object-fit:contain preserves the 4:3 aspect (no stretch). Esc exits.
+    (function () {
+      var btn = document.getElementById('fsbtn');
+      var wrap = document.getElementById('wrap');
+      if (!btn || !wrap) return;
+      btn.addEventListener('click', function () {
+        try {
+          if (document.fullscreenElement || document.webkitFullscreenElement) {
+            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+          } else {
+            (wrap.requestFullscreen || wrap.webkitRequestFullscreen).call(wrap);
+          }
+        } catch (e) {}
+        try { Module.canvas && Module.canvas.focus(); } catch (e) {}  // keep key events going to the game
+      });
+    })();
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

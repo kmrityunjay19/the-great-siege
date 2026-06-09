@@ -1,0 +1,109 @@
+From d58c06435f82ec3d0f28f607230ed5d3f8b2221e Mon Sep 17 00:00:00 2001
+From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
+Date: Tue, 9 Jun 2026 10:32:06 +0100
+Subject: [PATCH 4/5] input: stop edge-scroll when pointer leaves the window;
+ wheel-scroll menu lists
+
+Add Mouse::in_window (set/cleared on SDL_WINDOWEVENT_ENTER/LEAVE); World::detect_scroll skips edge-scroll when the cursor is outside (fixes runaway scroll across monitors). VBrowse::detect now consumes the mouse wheel to scroll lists. Not web-specific.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ include/OMOUSE.h |  5 +++++
+ src/OVBROWSE.cpp | 23 +++++++++++++++++++++++
+ src/OVGA.cpp     | 12 ++++++++++++
+ src/OWORLD.cpp   |  6 ++++++
+ 4 files changed, 46 insertions(+)
+
+diff --git a/include/OMOUSE.h b/include/OMOUSE.h
+index f5319ad..0e0d989 100644
+--- a/include/OMOUSE.h
++++ b/include/OMOUSE.h
+@@ -228,6 +228,11 @@ public:
+ 	int scroll_x = 0, scroll_y = 0;
+ 	double scroll_prev_y = 0.0, scroll_prev_x = 0.0;
+ 
++	// 1 while the pointer is over the canvas. Cleared when it leaves (e.g. moves
++	// to another monitor) so edge-scroll stops instead of running away on the
++	// stale cursor position. See World::detect_scroll / OVGA.cpp window events.
++	int in_window = 1;
++
+ public:
+ 	Mouse();
+ 	~Mouse();
+diff --git a/src/OVBROWSE.cpp b/src/OVBROWSE.cpp
+index d91b9dc..d4c0fc6 100644
+--- a/src/OVBROWSE.cpp
++++ b/src/OVBROWSE.cpp
+@@ -318,6 +318,29 @@ int VBrowse::detect()
+    if( state == 0 || none_record )             // closed
+       return 0;
+ 
++   //--------- mouse wheel scrolls the visible list ---------//
++   // (the wheel previously did nothing in menus; the map view consumes the same
++   //  get_scroll(), but the world and these list screens are never active together)
++
++   {
++      int wheelX = 0, wheelY = 0;
++      if( mouse.get_scroll(&wheelX, &wheelY) && wheelY != 0 )
++      {
++         int maxTop = total_rec_num - disp_max_rec + 1;
++         if( maxTop < 1 )
++            maxTop = 1;
++         int newTop = top_rec_no + wheelY * 3;       // a few rows per wheel notch
++         if( newTop > maxTop ) newTop = maxTop;
++         if( newTop < 1 )      newTop = 1;
++         if( newTop != top_rec_no )
++         {
++            top_rec_no = newTop;
++            disp_all();
++            return rec_no;
++         }
++      }
++   }
++
+    //-- Detect pulling on record if the browser is with frame --//
+ 	
+ 	if( detect_pull_flag && disp_frame && x_max_rec==1 )  // only pull when the vbrowser is vertical, horizontal is technically possible, but not used practically
+diff --git a/src/OVGA.cpp b/src/OVGA.cpp
+index f5fdca5..2f751c0 100644
+--- a/src/OVGA.cpp
++++ b/src/OVGA.cpp
+@@ -386,6 +386,18 @@ void Vga::handle_messages()
+                boundary_set = 0;
+                break;
+ 
++            case SDL_WINDOWEVENT_ENTER:
++               mouse.in_window = 1;
++               break;
++
++            case SDL_WINDOWEVENT_LEAVE:
++               // The pointer left the canvas (e.g. moved onto a second monitor).
++               // Stop edge-scrolling instead of running away on the now-stale
++               // cursor position; resumes when the pointer re-enters.
++               mouse.in_window = 0;
++               mouse.end_scroll();
++               break;
++
+             //case SDL_WINDOWEVENT_ENTER: // Do not respond to mouse focus
+             case SDL_WINDOWEVENT_FOCUS_GAINED:
+             case SDL_WINDOWEVENT_RESTORED:
+diff --git a/src/OWORLD.cpp b/src/OWORLD.cpp
+index d957236..f027d20 100644
+--- a/src/OWORLD.cpp
++++ b/src/OWORLD.cpp
+@@ -311,6 +311,12 @@ int World::detect()
+ int World::detect_scroll()
+ {
+    int scroll_x = 0, scroll_y = 0;
++
++   // Don't edge-scroll while the pointer is outside the canvas (e.g. on another
++   // monitor) — its last position is stale and would scroll the map forever.
++   if( !mouse.in_window )
++      return 0;
++
+    if( !vga.is_input_grabbed() && !mouse.get_scroll(&scroll_x, &scroll_y))
+       return 0;
+ 
+-- 
+2.54.0
+

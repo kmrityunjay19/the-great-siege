@@ -1,0 +1,9 @@
+{
+  "name": "7kaa-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WebSocket multiplayer relay + lobby for the 7kaa web port",
+  "main": "relay.js",
+  "scripts": { "start": "node relay.js" },
+  "dependencies": { "ws": "^8.18.0" }
+}

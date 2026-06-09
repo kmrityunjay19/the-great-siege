@@ -1,0 +1,1144 @@
+From 6b693fa5b7b002cc3a6d6dce71824d25633f1882 Mon Sep 17 00:00:00 2001
+From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
+Date: Tue, 9 Jun 2026 10:32:06 +0100
+Subject: [PATCH 3/5] multiplayer: WebSocket transport (wasm-to-wasm) over the
+ enet MultiPlayer API
+
+Browsers have no UDP, so reimplement the MultiPlayer API over emscripten/websocket.h (src/ws/multiplayer.cpp), gated by configure --enable-websocket (USE_WS_MP). mp_address.h makes ENetAddress an 8-byte POD that serialises identically across wasm clients. OGAMEMP/OGAME: fix service-button selection (painted but never detected) + pass service_mode by reference.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ configure.ac           |  27 +-
+ include/OGAME.h        |   2 +-
+ include/mp_address.h   |  43 ++
+ include/player_desc.h  |   6 +-
+ include/session_desc.h |   6 +-
+ src/Makefile.am        |  10 +
+ src/OGAMEMP.cpp        |  16 +-
+ src/ws/Makefile.am     |   4 +
+ src/ws/multiplayer.cpp | 865 +++++++++++++++++++++++++++++++++++++++++
+ 9 files changed, 962 insertions(+), 17 deletions(-)
+ create mode 100644 include/mp_address.h
+ create mode 100644 src/ws/Makefile.am
+ create mode 100644 src/ws/multiplayer.cpp
+
+diff --git a/configure.ac b/configure.ac
+index 960b68c..ff45ec0 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -169,6 +169,11 @@ AC_ARG_ENABLE([enet],
+   [], [enable_enet=yes]
+ )
+ 
++AC_ARG_ENABLE([websocket],
++  AS_HELP_STRING([--enable-websocket], [enable emscripten WebSocket multiplayer transport (browser)]),
++  [], [enable_websocket=no]
++)
++
+ 
+ # Select which backends to build
+ 
+@@ -187,22 +192,27 @@ AM_CONDITIONAL([USE_WINDOWS],  [test "$platform"      = windows])
+ AM_CONDITIONAL([USE_ASM],      [test "$enable_asm"    = yes])
+ AM_CONDITIONAL([USE_CURL],     [test "$enable_curl"   = yes])
+ AM_CONDITIONAL([USE_ENET],     [test "$enable_enet"   = yes])
++AM_CONDITIONAL([USE_WS_MP],    [test "$enable_websocket" = yes])
+ 
+ # Sync multiplayer support options
+ AS_IF([test "$enable_multiplayer" = yes], [
+-  AS_IF([test "$fpu_type" != 387], [
++  # A transport is required: enet (native) OR websocket (browser/wasm).
++  AS_IF([test "$enable_enet" != yes && test "$enable_websocket" != yes], [
+     enable_multiplayer=no
++    AC_MSG_NOTICE([Disabled: Multiplayer requires a transport (enet or websocket)])
+   ])
+-  AS_IF([test "$enable_enet" != yes], [
++  # The 387/-ffloat-store determinism gate only applies to the native enet path.
++  # The websocket path is wasm<->wasm only and relies on a byte-identical .wasm
++  # plus FLAG_UNKNOWN_BUILD (HAVE_KNOWN_BUILD left undefined) to refuse mixed joins.
++  AS_IF([test "$enable_websocket" != yes && test "$fpu_type" != 387], [
+     enable_multiplayer=no
+-  ])
+-  AS_IF([test "$enable_enet" != yes], [
+-    AC_MSG_NOTICE([Disabled: Multiplayer requires enet and 387 support])
++    AC_MSG_NOTICE([Disabled: native multiplayer requires 387 FPU support])
+   ])
+ ])
+ AS_IF([test "$enable_multiplayer" != yes], [
+   enable_curl=no
+   enable_enet=no
++  enable_websocket=no
+ ])
+ 
+ 
+@@ -381,6 +391,12 @@ AS_IF([test "$enable_enet" = yes], [
+   ])
+ ])
+ 
++AS_IF([test "$enable_websocket" = yes], [
++  AC_DEFINE([USE_WS_MP], [1], [
++    Define to 1 if using the emscripten WebSocket multiplayer transport
++  ])
++])
++
+ AS_IF([test "$have_register" = yes], [
+   AC_DEFINE([REGISTER], [register], [
+     Define to the register keyword your compiler allows
+@@ -401,6 +417,7 @@ AC_CONFIG_FILES([
+   src/Makefile
+   src/curl/Makefile
+   src/enet/Makefile
++  src/ws/Makefile
+   src/imgfun/Makefile
+   src/imgfun/generic/Makefile
+   src/imgfun/x86/Makefile
+diff --git a/include/OGAME.h b/include/OGAME.h
+index 258b9ec..09bfe83 100644
+--- a/include/OGAME.h
++++ b/include/OGAME.h
+@@ -152,7 +152,7 @@ private:
+ 
+ 	//------- multiplayer game functions -------//
+ 
+-	int 			mp_select_mode(char *saveGameName, int service_mode);
++	int 			mp_select_mode(char *saveGameName, int &service_mode);
+ 	int			mp_get_leader_board();
+ 	int			mp_join_session(int session_id);
+ 	void			mp_close_session();
+diff --git a/include/mp_address.h b/include/mp_address.h
+new file mode 100644
+index 0000000..4ac9071
+--- /dev/null
++++ b/include/mp_address.h
+@@ -0,0 +1,43 @@
++/*
++ * Seven Kingdoms: Ancient Adversaries
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++// Filename    : mp_address.h
++// Description : The ENetAddress type used as an opaque peer key by MultiPlayer.
++//
++// With the native enet transport (USE_ENET) this is enet's own struct. For the
++// browser WebSocket transport there is no real network address, so we define a
++// fixed-layout POD instead. It must serialize byte-identically on both clients
++// because MpStructAcceptNewPlayer (OGAMEMP.cpp) embeds it by value and sends it
++// over the wire; the explicit `reserved0` pad pins sizeof at 8 with no implicit
++// padding on either build. Only `host` is meaningful for the WS transport and it
++// carries the relay-assigned player id (host==0 means "unknown/any", mirroring
++// ENET_HOST_ANY). The layout matches the existing on-wire MpMsgSessionAddr /
++// MpMsgHostNatPunch structs in multiplayer.h.
++
++#ifndef __MP_ADDRESS_H
++#define __MP_ADDRESS_H
++
++#include <stdint.h>
++
++#ifdef USE_ENET
++#include <enet/enet.h>            // ENetAddress is enet's real struct
++#else
++typedef struct ENetAddress {
++	uint32_t host;
++	uint16_t port;
++	uint16_t reserved0;
++} ENetAddress;
++#endif
++
++#endif // __MP_ADDRESS_H
+diff --git a/include/player_desc.h b/include/player_desc.h
+index f3c0dee..44681fd 100644
+--- a/include/player_desc.h
++++ b/include/player_desc.h
+@@ -26,11 +26,7 @@
+ #define __PLAYER_DESC_H
+ 
+ #include <MPTYPES.h>
+-#ifdef USE_ENET
+-#include <enet/enet.h>
+-#else
+-typedef void * ENetAddress;
+-#endif
++#include <mp_address.h>
+ 
+ class PlayerDesc
+ {
+diff --git a/include/session_desc.h b/include/session_desc.h
+index 28b5792..e9ec70b 100644
+--- a/include/session_desc.h
++++ b/include/session_desc.h
+@@ -24,11 +24,7 @@
+ 
+ #include <MPTYPES.h>
+ #include <misc_uuid.h>
+-#ifdef USE_ENET
+-#include <enet/enet.h>
+-#else
+-typedef void * ENetAddress;
+-#endif
++#include <mp_address.h>
+ 
+ struct SessionFlags {
+ 	enum {
+diff --git a/src/Makefile.am b/src/Makefile.am
+index 0e638d8..c7b13a1 100644
+--- a/src/Makefile.am
++++ b/src/Makefile.am
+@@ -2,6 +2,9 @@ SUBDIRS = enet imgfun openal
+ if USE_CURL
+ SUBDIRS += curl
+ endif
++if USE_WS_MP
++SUBDIRS += ws
++endif
+ 
+ bin_PROGRAMS = 7kaa
+ 7kaa_SOURCES = \
+@@ -298,6 +301,9 @@ AM_CXXFLAGS = $(GLOBAL_CFLAGS)
+ AM_CXXFLAGS += $(SDL_CFLAGS)
+ 
+ AM_LDFLAGS = $(GLOBAL_LDFLAGS)
++if USE_WS_MP
++AM_LDFLAGS += -lwebsocket.js
++endif
+ 
+ 7kaa_LDADD =
+ 
+@@ -306,7 +312,11 @@ if AUDIO_OPENAL
+ endif
+ 
+ 
++if USE_WS_MP
++7kaa_LDADD += ./ws/libmultiplayer_ws.a
++else
+ 7kaa_LDADD += ./enet/libmultiplayer.a
++endif
+ 
+ 
+ if USE_ASM
+diff --git a/src/OGAMEMP.cpp b/src/OGAMEMP.cpp
+index e9349df..c9f36e7 100644
+--- a/src/OGAMEMP.cpp
++++ b/src/OGAMEMP.cpp
+@@ -1203,7 +1203,7 @@ const char *login_dialog_txt[] =
+ };
+ //-------- Begin of function Game::mp_select_mode --------//
+ // return 0 = cancel, 1 = create, 2 = join
+-int Game::mp_select_mode(char *defSaveFileName, int service_mode)
++int Game::mp_select_mode(char *defSaveFileName, int &service_mode)
+ {
+ 	static short buttonX[SERVICE_BUTTON_NUM] = { 171, 171, 171 };
+ 	static short buttonY[SERVICE_BUTTON_NUM] = {  57, 125, 193 };
+@@ -1381,6 +1381,20 @@ int Game::mp_select_mode(char *defSaveFileName, int service_mode)
+ 			rc = 2;
+ 		}
+ 
++		// allow (re-)selecting the connection service from this screen — these
++		// buttons were painted but never detected, so they looked clickable yet
++		// did nothing. service_mode is by-reference, so the change propagates to
++		// the caller's create/join logic.
++		for( int sb = 0; sb < SERVICE_BUTTON_NUM; ++sb )
++		{
++			if( sb != service_mode-1 && serviceButton[sb].detect() )
++			{
++				service_mode = sb + 1;
++				refreshFlag |= SMOPTION_PAGE;
++				break;
++			}
++		}
++
+ 		if( rc )
+ 		{
+ 			// check saveFileName is AUTO*
+diff --git a/src/ws/Makefile.am b/src/ws/Makefile.am
+new file mode 100644
+index 0000000..1d968b3
+--- /dev/null
++++ b/src/ws/Makefile.am
+@@ -0,0 +1,4 @@
++noinst_LIBRARIES = libmultiplayer_ws.a
++libmultiplayer_ws_a_SOURCES = multiplayer.cpp
++
++AM_CXXFLAGS = $(GLOBAL_CFLAGS)
+diff --git a/src/ws/multiplayer.cpp b/src/ws/multiplayer.cpp
+new file mode 100644
+index 0000000..4244506
+--- /dev/null
++++ b/src/ws/multiplayer.cpp
+@@ -0,0 +1,865 @@
++/*
++ * Seven Kingdoms: Ancient Adversaries
++ *
++ * This program is free software: you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation, either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++// Filename    : multiplayer.cpp  (src/ws)
++// Description : Multiplayer transport over Emscripten WebSockets + a Node relay.
++//
++// A drop-in replacement for src/enet/multiplayer.cpp that implements the same
++// public MultiPlayer API but moves bytes over a WebSocket to a star-topology
++// relay (relay/relay.js) instead of enet/UDP. The relay is a dumb router:
++// host = player id 1, clients = 2..MAX_NATION; it re-frames each game frame with
++// the SENDER id and synthesizes CONNECT/DISCONNECT control frames. WebSocket/TCP
++// is reliable+ordered, so the engine's ec_remote lockstep layer is untouched and
++// game_starting() is a no-op. Scope is wasm<->wasm only (FLAG_UNKNOWN_BUILD stays
++// set via an undefined HAVE_KNOWN_BUILD, so the lobby refuses native joins).
++//
++// Wire protocol (must match relay/relay.js):
++//   Control = TEXT JSON: {"op":"create"|"join","code":..,"name":..} ->
++//                        {"op":"joined","playerId":N,"host":bool},
++//                        {"op":"peer_connect"|"peer_disconnect","playerId":N},
++//                        {"op":"error","msg":..}
++//   Game    = BINARY:    [dstId:u32 LE][payload]  ->  [srcId:u32 LE][payload]
++//                        (dst 0 = broadcast to room)
++
++#include <multiplayer.h>
++#include <ALL.h>
++#include <string.h>
++#include <stdint.h>
++#include <stdlib.h>
++#include <stdio.h>
++#include <dbglog.h>
++
++#ifdef USE_WS_MP
++
++#include <emscripten/emscripten.h>
++#include <emscripten/websocket.h>
++
++DBGLOG_DEFAULT_CHANNEL(MultiPlayer);
++
++#define MP_RECV_BUFFER_SIZE     (512*3)
++#define MP_RECV_MAX_BUFFER_SIZE (512*20)
++
++static_assert(sizeof(ENetAddress) == 8,
++	"ENetAddress POD must be 8 bytes so it serializes byte-identically across wasm clients");
++
++namespace {
++
++// ---- inbound event FIFO (filled by JS callbacks, drained by receive()) ----
++// One ordered ring preserves relay arrival order across data and connect/
++// disconnect events, which is what the lockstep layer needs. Single-threaded:
++// callbacks fire on the main thread during the ASYNCIFY yield, receive() also
++// runs on the main thread, and they never interleave mid-operation, so no locks.
++
++enum WsEvtType { WS_EVT_DATA, WS_EVT_CONNECT, WS_EVT_DISCONNECT };
++
++struct WsEvent {
++	WsEvtType type;
++	uint32_t  playerId;
++	uint32_t  size;     // payload size for WS_EVT_DATA
++};
++
++const int WS_EVT_CAP = 128;        // ample for MAX_NATION=7 lockstep bursts
++WsEvent   g_evt[WS_EVT_CAP];
++char      g_data[WS_EVT_CAP][MP_RECV_MAX_BUFFER_SIZE];
++int       g_evt_head = 0, g_evt_tail = 0;   // empty when head==tail
++
++// ---- connection / room state ----
++int       g_sock = 0;              // EMSCRIPTEN_WEBSOCKET_T (0 == none)
++bool      g_open = false;
++bool      g_joined = false;
++bool      g_error = false;
++bool      g_is_host = false;
++uint32_t  g_my_id = 0;             // relay-assigned id (== engine id by design)
++char      g_relay_url[256];
++char      g_room_code[80];
++char      g_my_name[MP_FRIENDLY_NAME_LEN+1];
++
++// per-player liveness + owned descriptors, indexed by playerId (1..MAX_NATION)
++unsigned char g_peer_connected[MAX_NATION+1];
++PlayerDesc   *g_known[MAX_NATION+1];
++
++ENetAddress empty_address()
++{
++	ENetAddress a;
++	a.host = 0; a.port = 0; a.reserved0 = 0;
++	return a;
++}
++
++ENetAddress id_address(uint32_t id)
++{
++	ENetAddress a;
++	a.host = id; a.port = 0; a.reserved0 = 0;
++	return a;
++}
++
++void enqueue_event(WsEvtType type, uint32_t playerId, const void *data, uint32_t size)
++{
++	int next = (g_evt_tail + 1) % WS_EVT_CAP;
++	if (next == g_evt_head) {
++		ERR("[ws] event ring full, dropping event type=%d player=%u\n", type, playerId);
++		return;
++	}
++	int i = g_evt_tail;
++	g_evt[i].type = type;
++	g_evt[i].playerId = playerId;
++	if (type == WS_EVT_DATA) {
++		if (size > MP_RECV_MAX_BUFFER_SIZE) {
++			ERR("[ws] oversized frame %u, clamped\n", size);
++			size = MP_RECV_MAX_BUFFER_SIZE;
++		}
++		if (size && data)
++			memcpy(g_data[i], data, size);
++	}
++	g_evt[i].size = size;
++	g_evt_tail = next;
++}
++
++// hand-rolled control-frame parsing (tiny fixed vocabulary, no JSON lib)
++void handle_control_text(const char *data, int len)
++{
++	char buf[256];
++	int n = (len < (int)sizeof(buf)-1) ? len : (int)sizeof(buf)-1;
++	memcpy(buf, data, n);
++	buf[n] = 0;
++
++	char op[24] = {0};
++	const char *p = strstr(buf, "\"op\":\"");
++	if (p) {
++		p += 6;
++		int i = 0;
++		while (*p && *p != '"' && i < (int)sizeof(op)-1) op[i++] = *p++;
++		op[i] = 0;
++	}
++
++	long pid = 0;
++	const char *q = strstr(buf, "\"playerId\":");
++	if (q) pid = atol(q + 11);
++
++	if (!strcmp(op, "joined")) {
++		g_joined = true;
++		g_my_id = (uint32_t)pid;
++		MSG("[ws] joined relay as playerId=%ld\n", pid);
++	} else if (!strcmp(op, "peer_connect")) {
++		if (pid >= 1 && pid <= MAX_NATION)
++			enqueue_event(WS_EVT_CONNECT, (uint32_t)pid, NULL, 0);
++	} else if (!strcmp(op, "peer_disconnect")) {
++		if (pid >= 1 && pid <= MAX_NATION)
++			enqueue_event(WS_EVT_DISCONNECT, (uint32_t)pid, NULL, 0);
++	} else if (!strcmp(op, "error")) {
++		g_error = true;
++		ERR("[ws] relay error: %s\n", buf);
++	}
++}
++
++bool ws_on_open(int, const EmscriptenWebSocketOpenEvent *e, void *)
++{
++	g_open = true;
++	char frame[160];
++	snprintf(frame, sizeof(frame), "{\"op\":\"%s\",\"code\":\"%s\",\"name\":\"%s\"}",
++		g_is_host ? "create" : "join", g_room_code, g_my_name);
++	emscripten_websocket_send_utf8_text(e->socket, frame);
++	MSG("[ws] socket open, sent %s for room '%s'\n", g_is_host ? "create" : "join", g_room_code);
++	return true;
++}
++
++bool ws_on_message(int, const EmscriptenWebSocketMessageEvent *e, void *)
++{
++	if (e->isText) {
++		handle_control_text((const char *)e->data, (int)e->numBytes);
++	} else if (e->numBytes >= 4) {
++		uint32_t src;
++		memcpy(&src, e->data, 4);    // little-endian on wasm
++		enqueue_event(WS_EVT_DATA, src, e->data + 4, e->numBytes - 4);
++	}
++	return true;
++}
++
++bool ws_on_error(int, const EmscriptenWebSocketErrorEvent *, void *)
++{
++	g_error = true;
++	ERR("[ws] socket error\n");
++	return true;
++}
++
++bool ws_on_close(int, const EmscriptenWebSocketCloseEvent *, void *)
++{
++	g_open = false;
++	// A hard socket close yields no relay peer_disconnect frames, so synthesize a
++	// DISCONNECT for every peer still believed live, or the engine hangs on the
++	// lockstep barrier instead of converting lost nations to AI.
++	for (int id = 1; id <= MAX_NATION; id++)
++		if (g_peer_connected[id])
++			enqueue_event(WS_EVT_DISCONNECT, (uint32_t)id, NULL, 0);
++	MSG("[ws] socket closed\n");
++	return true;
++}
++
++void sanitize_code(const char *in, char *out, int outsz)
++{
++	int j = 0;
++	for (int i = 0; in && in[i] && j < outsz-1; i++) {
++		char c = in[i];
++		if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
++		if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))
++			out[j++] = c;
++	}
++	out[j] = 0;
++}
++
++void sanitize_name(const char *in, char *out, int outsz)
++{
++	int j = 0;
++	for (int i = 0; in && in[i] && j < outsz-1; i++) {
++		char c = in[i];
++		if (c == '"' || c == '\\' || (unsigned char)c < 0x20) continue;
++		out[j++] = c;
++	}
++	out[j] = 0;
++}
++
++// [ws[s]://host[:port]][#CODE]  | bare CODE  | bare ws://url
++void parse_relay_target(const char *in, char *url_out, int url_sz, char *code_out, int code_sz)
++{
++	url_out[0] = 0;
++	code_out[0] = 0;
++	if (!in) return;
++	while (*in == ' ') in++;
++
++	const char *hash = strchr(in, '#');
++	if (hash) {
++		int ulen = (int)(hash - in);
++		if (ulen > 0) {
++			if (ulen >= url_sz) ulen = url_sz-1;
++			memcpy(url_out, in, ulen);
++			url_out[ulen] = 0;
++		}
++		strncpy(code_out, hash+1, code_sz-1);
++		code_out[code_sz-1] = 0;
++	} else if (strstr(in, "://")) {
++		strncpy(url_out, in, url_sz-1);
++		url_out[url_sz-1] = 0;
++	} else {
++		strncpy(code_out, in, code_sz-1);
++		code_out[code_sz-1] = 0;
++	}
++}
++
++void resolve_relay_url(const char *parsed)
++{
++	if (parsed && parsed[0]) {
++		if (strstr(parsed, "://")) {
++			strncpy(g_relay_url, parsed, sizeof(g_relay_url)-1);
++			g_relay_url[sizeof(g_relay_url)-1] = 0;
++		} else {
++			snprintf(g_relay_url, sizeof(g_relay_url), "ws://%s", parsed);
++		}
++		return;
++	}
++	const char *env = getenv("KAA_RELAY");
++	if (env && env[0]) {
++		strncpy(g_relay_url, env, sizeof(g_relay_url)-1);
++		g_relay_url[sizeof(g_relay_url)-1] = 0;
++		return;
++	}
++	strcpy(g_relay_url, "ws://localhost:8090");
++}
++
++bool ws_connect()
++{
++	if (!emscripten_websocket_is_supported()) {
++		ERR("[ws] WebSocket unsupported by this browser\n");
++		return false;
++	}
++	EmscriptenWebSocketCreateAttributes attr;
++	emscripten_websocket_init_create_attributes(&attr);
++	attr.url = g_relay_url;
++	attr.protocols = NULL;
++	attr.createOnMainThread = true;
++
++	int sock = emscripten_websocket_new(&attr);
++	if (sock <= 0) {
++		ERR("[ws] emscripten_websocket_new('%s') failed: %d\n", g_relay_url, sock);
++		return false;
++	}
++	g_sock = sock;
++	g_open = false;
++	g_joined = false;
++	g_error = false;
++	emscripten_websocket_set_onopen_callback(sock, NULL, ws_on_open);
++	emscripten_websocket_set_onmessage_callback(sock, NULL, ws_on_message);
++	emscripten_websocket_set_onerror_callback(sock, NULL, ws_on_error);
++	emscripten_websocket_set_onclose_callback(sock, NULL, ws_on_close);
++	MSG("[ws] connecting to relay %s as %s\n", g_relay_url, g_is_host ? "host" : "guest");
++	return true;
++}
++
++int sort_players(const void *a, const void *b)
++{
++	PlayerDesc *pa = *(PlayerDesc *const *)a;
++	PlayerDesc *pb = *(PlayerDesc *const *)b;
++	uint32_t ida = pa ? pa->id : 0xffffffffu;
++	uint32_t idb = pb ? pb->id : 0xffffffffu;
++	if (ida < idb) return -1;
++	if (ida > idb) return 1;
++	return 0;
++}
++
++} // anonymous namespace
++
++
++MultiPlayer::MultiPlayer() :
++	current_sessions(sizeof(SessionDesc), 10),
++	my_player("?my_player?", empty_address())
++{
++	init_flag = 0;
++	lobbied_flag = 0;
++	supported_protocols = TCPIP;
++	my_player_id = 0;
++	joined_session.flags = 0;
++	recv_buf = NULL;
++}
++
++MultiPlayer::~MultiPlayer()
++{
++	deinit();
++}
++
++void MultiPlayer::init(ProtocolType protocol_type)
++{
++	if (init_flag)
++		return;
++
++	lobbied_flag = 0;
++	my_player_id = 0;
++	update_available = -1;
++	host = NULL;
++	packet_mode = 0;
++
++	if (!is_protocol_supported(protocol_type)) {
++		ERR("[MultiPlayer::init] unsupported protocol\n");
++		return;
++	}
++
++	for (int i = 0; i < MAX_NATION; i++) {
++		player_pool[i] = NULL;
++		pending_pool[i] = NULL;
++	}
++	for (int id = 0; id <= MAX_NATION; id++) {
++		g_known[id] = NULL;
++		g_peer_connected[id] = 0;
++	}
++
++	recv_buf = new char[MP_RECV_BUFFER_SIZE];
++	recv_buffer_size = MP_RECV_BUFFER_SIZE;
++
++	g_sock = 0;
++	g_open = false;
++	g_joined = false;
++	g_error = false;
++	g_is_host = false;
++	g_my_id = 0;
++	g_evt_head = g_evt_tail = 0;
++	g_relay_url[0] = 0;
++	g_room_code[0] = 0;
++	g_my_name[0] = 0;
++
++	init_flag = 1;
++}
++
++void MultiPlayer::deinit()
++{
++	if (!init_flag)
++		return;
++
++	init_flag = 0;
++	lobbied_flag = 0;
++
++	if (g_sock) {
++		emscripten_websocket_close(g_sock, 1000, "bye");
++		emscripten_websocket_delete(g_sock);
++		g_sock = 0;
++	}
++	g_open = false;
++	g_joined = false;
++	g_error = false;
++	g_evt_head = g_evt_tail = 0;
++
++	current_sessions.zap();
++
++	for (int id = 1; id <= MAX_NATION; id++) {
++		if (g_known[id]) {
++			delete g_known[id];
++			g_known[id] = NULL;
++		}
++		g_peer_connected[id] = 0;
++	}
++	for (int i = 0; i < MAX_NATION; i++) {
++		if (pending_pool[i]) {
++			delete pending_pool[i];
++			pending_pool[i] = NULL;
++		}
++	}
++
++	if (recv_buf) {
++		delete [] recv_buf;
++		recv_buf = NULL;
++	}
++}
++
++// Guest entry point + relay-URL/room-code parser. cmdLine is whatever the user
++// typed into the "Enter Address" box (or a launch arg): a relay URL, a room
++// code, or both joined by '#'.
++int MultiPlayer::init_lobbied(int maxPlayers, char *cmdLine)
++{
++	if (!cmdLine) {
++		// hosting-from-lobby is not supported (mirror enet)
++		lobbied_flag = 1;
++		return 1;
++	}
++
++	char url[256] = {0};
++	char code[80] = {0};
++	parse_relay_target(cmdLine, url, sizeof(url), code, sizeof(code));
++
++	resolve_relay_url(url[0] ? url : NULL);
++	sanitize_code(code, g_room_code, sizeof(g_room_code));
++	if (!g_room_code[0]) {
++		ERR("[ws] no room code in '%s'\n", cmdLine);
++		return 0;
++	}
++
++	// register the (single) joinable session; the host is always relay id 1
++	guuid_t sessionId;
++	misc.uuid_generate_random(sessionId);
++	SessionDesc session("Relay Game", sessionId, SessionFlags::Pregame, id_address(1));
++	strcpy(session.password, "1");
++	session.max_players = maxPlayers;
++	current_sessions.linkin(&session);
++
++	g_is_host = false;
++	sanitize_name(my_player.name, g_my_name, sizeof(g_my_name));
++
++	if (!ws_connect())
++		return 0;
++
++	lobbied_flag = 2;
++	return 1;
++}
++
++int MultiPlayer::is_lobbied()
++{
++	return lobbied_flag;
++}
++
++char *MultiPlayer::get_lobbied_name()
++{
++	return NULL;
++}
++
++void MultiPlayer::poll_supported_protocols()
++{
++}
++
++bool MultiPlayer::is_protocol_supported(ProtocolType protocol)
++{
++	return (protocol & supported_protocols) != 0;
++}
++
++int MultiPlayer::is_update_available()
++{
++	return update_available;
++}
++
++void MultiPlayer::game_starting()
++{
++	// no-op: WebSocket/TCP is already reliable+ordered (enet flipped to UNSEQUENCED here)
++}
++
++void MultiPlayer::disable_new_connections()
++{
++	joined_session.flags &= ~SessionFlags::Pregame;
++}
++
++int MultiPlayer::set_service_provider(const char *)
++{
++	// no internet/7kfans directory service in the browser build
++	return 0;
++}
++
++int MultiPlayer::poll_sessions()
++{
++	// LAN discovery is unsupported; the guest reaches a session via init_lobbied
++	return MP_POLL_NO_UPDATE;
++}
++
++static int sort_session_name(const void *a, const void *b)
++{
++	return strcmp(((SessionDesc *)a)->session_name, ((SessionDesc *)b)->session_name);
++}
++
++void MultiPlayer::sort_sessions(int sortType)
++{
++	switch (sortType) {
++	case 1:
++		ERR("[MultiPlayer::sort_sessions] sorting by GUID is not supported\n");
++		break;
++	case 2:
++		current_sessions.quick_sort(sort_session_name);
++		break;
++	default:
++		err_here();
++	}
++}
++
++// Host entry point.
++int MultiPlayer::create_session(char *sessionName, char *password, int maxPlayers)
++{
++	err_when(!init_flag || maxPlayers <= 0 || maxPlayers > MAX_NATION);
++
++	const char *name = (sessionName && strlen(sessionName)) ? sessionName : "?Anonymous?";
++	strcpy(joined_session.session_name, name);
++	strcpy(joined_session.password, password);
++	joined_session.max_players = maxPlayers;
++	joined_session.player_count = 1;
++	joined_session.flags |= SessionFlags::Hosting | SessionFlags::Pregame;
++	if (password[0])
++		joined_session.flags |= SessionFlags::Password;
++	if (joined_session.player_count >= joined_session.max_players)
++		joined_session.flags |= SessionFlags::Full;
++	misc.uuid_generate_random(joined_session.session_id);
++	joined_session.address = id_address(1);
++
++	// room code from the (sanitized) game name; relay url from KAA_RELAY/default
++	g_is_host = true;
++	sanitize_code(name, g_room_code, sizeof(g_room_code));
++	resolve_relay_url(NULL);
++	sanitize_name(my_player.name, g_my_name, sizeof(g_my_name));
++	if (!g_room_code[0])
++		strcpy(g_room_code, "GAME");
++
++	if (!ws_connect())
++		return 0;
++
++	set_my_player_id(1);
++	player_pool[0] = &my_player;
++	return 1;
++}
++
++int MultiPlayer::connect_host()
++{
++	// guest socket already targets the relay; the "join" frame is sent on open
++	return 1;
++}
++
++int MultiPlayer::join_session(SessionDesc *session)
++{
++	if (!session)
++		return 0;
++	joined_session = *session;
++	joined_session.flags &= ~SessionFlags::Hosting;
++	return 1;
++}
++
++int MultiPlayer::close_session()
++{
++	joined_session.flags = 0;
++
++	int count = 0;
++	for (int id = 1; id <= MAX_NATION; id++)
++		if (g_peer_connected[id])
++			count++;
++
++	if (g_sock) {
++		// close fires ws_on_close, which synthesizes DISCONNECTs that the
++		// engine's mp_close_session drain loop consumes via receive().
++		emscripten_websocket_close(g_sock, 1000, "leave");
++	}
++
++	return count;
++}
++
++SessionDesc *MultiPlayer::get_session(int i)
++{
++	if (i <= 0 || i > current_sessions.size())
++		return NULL;
++	return (SessionDesc *)current_sessions.get(i);
++}
++
++SessionDesc *MultiPlayer::get_session(ENetAddress *address)
++{
++	for (int i = 1; i <= current_sessions.size(); i++) {
++		SessionDesc *p = (SessionDesc *)current_sessions.get(i);
++		if (p && address && p->address.host == address->host)
++			return p;
++	}
++	return NULL;
++}
++
++SessionDesc *MultiPlayer::get_session(guuid_t id)
++{
++	for (int i = 1; i <= current_sessions.size(); i++) {
++		SessionDesc *p = (SessionDesc *)current_sessions.get(i);
++		if (p && !misc.uuid_compare(p->session_id, id))
++			return p;
++	}
++	return NULL;
++}
++
++SessionDesc *MultiPlayer::get_current_session()
++{
++	return &joined_session;
++}
++
++// Client side of MPMSG_ACCEPT_NEW_PLAYER: a player the host told us about.
++int MultiPlayer::add_player(uint32_t playerId, char *name, ENetAddress *address, char /*contact*/)
++{
++	if (playerId == my_player_id || playerId < 1 || playerId > MAX_NATION)
++		return 0;
++
++	PlayerDesc *player = g_known[playerId];
++	if (!player) {
++		ENetAddress a = address ? *address : id_address(playerId);
++		player = new PlayerDesc(name, a);
++		g_known[playerId] = player;
++	} else {
++		strncpy(player->name, name, MP_FRIENDLY_NAME_LEN);
++		player->name[MP_FRIENDLY_NAME_LEN] = 0;
++	}
++	player->id = playerId;
++	player->authorized = 1;
++	g_peer_connected[playerId] = 1;
++
++	update_player_pool();
++	return 1;
++}
++
++// Host side: a guest sent MPMSG_NEW_PLAYER; validate and authorize it.
++int MultiPlayer::auth_player(uint32_t playerId, char *name, char *password)
++{
++	PlayerDesc *player = g_known[playerId];
++	if (!player)
++		return 0;
++
++	if ((joined_session.flags & SessionFlags::Password) &&
++		memcmp(password, joined_session.password, MP_FRIENDLY_NAME_LEN)) {
++		MSG("[ws] player %u password incorrect\n", playerId);
++		return 0;
++	}
++
++	strncpy(player->name, name, MP_FRIENDLY_NAME_LEN+1);
++	player->name[MP_FRIENDLY_NAME_LEN] = 0;
++	player->authorized = 1;
++
++	MSG("[ws] player '%s' (%u) authorized\n", player->name, playerId);
++	update_player_pool();
++	return 1;
++}
++
++void MultiPlayer::create_my_player(char *playerName)
++{
++	const char *name = (playerName && strlen(playerName)) ? playerName : "?Anonymous?";
++	my_player = PlayerDesc(name, empty_address());
++}
++
++int MultiPlayer::set_my_player_id(uint32_t playerId)
++{
++	my_player_id = playerId;
++	my_player.id = playerId;
++	my_player.authorized = 1;
++	MSG("[ws] assigned my player id=%u\n", playerId);
++	return 1;
++}
++
++void MultiPlayer::delete_player(uint32_t playerId)
++{
++	if (playerId < 1 || playerId > MAX_NATION)
++		return;
++
++	g_peer_connected[playerId] = 0;
++	if (g_known[playerId]) {
++		MSG("[ws] player '%s' (%u) deleted\n", g_known[playerId]->name, playerId);
++		delete g_known[playerId];
++		g_known[playerId] = NULL;
++	}
++	update_player_pool();
++}
++
++int MultiPlayer::poll_players()
++{
++	// no LAN broadcast / NAT service to pump
++	return MP_POLL_NO_UPDATE;
++}
++
++void MultiPlayer::update_player_pool()
++{
++	player_pool[0] = &my_player;
++
++	int i = 1;
++	for (int id = 1; id <= MAX_NATION; id++) {
++		if (i >= joined_session.max_players)
++			break;
++		PlayerDesc *p = g_known[id];
++		if (p && g_peer_connected[id] && p->authorized)
++			player_pool[i++] = p;
++	}
++
++	joined_session.player_count = i;
++	if (joined_session.player_count >= joined_session.max_players)
++		joined_session.flags |= SessionFlags::Full;
++	else
++		joined_session.flags &= ~SessionFlags::Full;
++
++	for (; i < MAX_NATION; i++)
++		player_pool[i] = NULL;
++
++	qsort(&player_pool, joined_session.player_count, sizeof(player_pool[0]), &sort_players);
++}
++
++PlayerDesc *MultiPlayer::get_player(int i)
++{
++	if (i < 1 || i > MAX_NATION)
++		return NULL;
++	return player_pool[i-1];
++}
++
++PlayerDesc *MultiPlayer::search_player(uint32_t playerId)
++{
++	for (int i = 0; i < MAX_NATION; i++)
++		if (player_pool[i] && player_pool[i]->id == playerId)
++			return player_pool[i];
++	return NULL;
++}
++
++int MultiPlayer::is_player_connecting(uint32_t playerId)
++{
++	if (playerId == my_player_id)
++		return 1;
++	if (playerId < 1 || playerId > MAX_NATION)
++		return 0;
++	return g_peer_connected[playerId] ? 1 : 0;
++}
++
++int MultiPlayer::get_player_count()
++{
++	return joined_session.player_count;
++}
++
++int MultiPlayer::send(uint32_t to, void *data, uint32_t msg_size)
++{
++	err_when(msg_size > MP_RECV_MAX_BUFFER_SIZE);
++
++	if (to == my_player_id)
++		return 0;
++	if (!g_sock || !g_open)
++		return 0;
++
++	uint32_t dst = (to == BROADCAST_PID) ? 0 : to;
++
++	char frame[4 + MP_RECV_MAX_BUFFER_SIZE];
++	memcpy(frame, &dst, 4);          // little-endian on wasm
++	memcpy(frame + 4, data, msg_size);
++
++	EMSCRIPTEN_RESULT r = emscripten_websocket_send_binary(g_sock, frame, 4 + msg_size);
++	return (r == EMSCRIPTEN_RESULT_SUCCESS) ? 1 : 0;
++}
++
++char *MultiPlayer::receive(uint32_t *from, uint32_t *size, int *sysMsgCount)
++{
++	if (sysMsgCount)
++		*sysMsgCount = 0;
++	*from = 0;
++
++	if (g_evt_head == g_evt_tail)
++		return NULL;                 // empty (mirrors enet_host_service == 0)
++
++	int i = g_evt_head;
++	WsEvent ev = g_evt[i];
++	char *ret = NULL;
++
++	switch (ev.type) {
++	case WS_EVT_CONNECT:
++		*from = ev.playerId;
++		if (sysMsgCount)
++			*sysMsgCount = 1;
++		g_peer_connected[ev.playerId] = 1;
++		if (g_is_host && !g_known[ev.playerId]) {
++			// the relay-assigned id IS the engine id for this guest; create the
++			// descriptor now (unauthorized) so auth_player()/search_player() find it
++			PlayerDesc *p = new PlayerDesc("?Anonymous?", id_address(ev.playerId));
++			p->id = ev.playerId;
++			p->authorized = 0;
++			g_known[ev.playerId] = p;
++		}
++		update_player_pool();
++		break;
++
++	case WS_EVT_DISCONNECT:
++		*from = ev.playerId;
++		if (sysMsgCount)
++			*sysMsgCount = -1;
++		g_peer_connected[ev.playerId] = 0;
++		update_player_pool();
++		break;
++
++	case WS_EVT_DATA:
++		{
++			uint32_t sz = ev.size;
++			if (sz > recv_buffer_size) {
++				delete [] recv_buf;
++				recv_buf = new char[MP_RECV_MAX_BUFFER_SIZE];
++				recv_buffer_size = MP_RECV_MAX_BUFFER_SIZE;
++			}
++			memcpy(recv_buf, g_data[i], sz);
++			*size = sz;
++			*from = ev.playerId;
++			ret = recv_buf;
++		}
++		break;
++	}
++
++	g_evt_head = (g_evt_head + 1) % WS_EVT_CAP;
++	return ret;
++}
++
++// ---- private enet-only helpers: unused by the WebSocket transport ----
++int  MultiPlayer::open_port(uint16_t, int)              { return 0; }
++void MultiPlayer::close_port()                          {}
++ENetSocket MultiPlayer::create_socket(uint16_t)         { return NULL; }
++void MultiPlayer::destroy_socket(ENetSocket)            {}
++void MultiPlayer::send_user_session_status(ENetAddress *) {}
++void MultiPlayer::send_req_login_id()                   {}
++void MultiPlayer::send_poll_sessions()                  {}
++void MultiPlayer::send_req_session_id()                 {}
++void MultiPlayer::send_req_session_addr()               {}
++void MultiPlayer::send_ping(ENetSocket, ENetAddress *)  {}
++void MultiPlayer::send_req_host_nat_punch()             {}
++void MultiPlayer::send_service_ping()                   {}
++void MultiPlayer::do_host_nat_punch(MpMsgHostNatPunch *) {}
++
++uint32_t MultiPlayer::get_avail_player_id()
++{
++	uint32_t id = 2;
++	while (id <= MAX_NATION && (g_known[id] || g_peer_connected[id]))
++		id++;
++	return id;
++}
++
++int MultiPlayer::add_pending_player(PlayerDesc *)       { return 0; }
++PlayerDesc *MultiPlayer::yank_pending_player(uint32_t)  { return NULL; }
++PlayerDesc *MultiPlayer::yank_pending_player(ENetAddress *) { return NULL; }
++ENetPeer *MultiPlayer::get_peer(uint32_t)               { return NULL; }
++ENetPeer *MultiPlayer::get_peer(ENetAddress *)          { return NULL; }
++int MultiPlayer::retrieve_packet(ENetEvent *, uint32_t *) { return 0; }
++
++#endif // USE_WS_MP
+-- 
+2.54.0
+

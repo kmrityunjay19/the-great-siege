@@ -1,0 +1,11 @@
+#!/bin/bash
+# Shim so 7kaa's AM_PATH_SDL2 autoconf macro resolves to Emscripten's bundled SDL2
+# port (-sUSE_SDL=2) instead of a system sdl2-config. Used only at ./configure time.
+case "$1" in
+  --version) echo "2.24.0" ;;
+  --cflags)  echo "-sUSE_SDL=2" ;;
+  --libs)    echo "-sUSE_SDL=2" ;;
+  --static-libs) echo "-sUSE_SDL=2" ;;
+  --prefix)  echo "/emscripten" ;;
+  *) echo "" ;;
+esac

@@ -1,0 +1,35 @@
+From 86cb61b5735b15d000f2b188f31a091837003749 Mon Sep 17 00:00:00 2001
+From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
+Date: Tue, 9 Jun 2026 10:32:06 +0100
+Subject: [PATCH 2/5] portability: guard LC_MESSAGES for a libc without it
+ (Emscripten)
+
+Move <locale.h> out of the ENABLE_NLS guard and #ifndef LC_MESSAGES, which Emscripten's libc omits. The only source change needed to compile the engine to wasm.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ src/LocaleRes.cpp | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/LocaleRes.cpp b/src/LocaleRes.cpp
+index ec6bcce..8b2e887 100644
+--- a/src/LocaleRes.cpp
++++ b/src/LocaleRes.cpp
+@@ -22,9 +22,13 @@
+ //Description : Locale Resources
+ 
+ #include <stdlib.h>
++#include <locale.h>
+ #ifdef ENABLE_NLS
+ #include <libintl.h>
+-#include <locale.h>
++#endif
++// Some libc builds (e.g. Emscripten) omit the POSIX LC_MESSAGES category.
++#ifndef LC_MESSAGES
++#define LC_MESSAGES LC_ALL
+ #endif
+ 
+ #include <ALL.h>
+-- 
+2.54.0
+
