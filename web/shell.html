@@ -9,8 +9,14 @@
       font-family: ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
     #wrap { position: relative; width: 100vw; height: 100vh; }
     /* The engine renders to an 800x600 buffer; scale the element to fill the whole
-       viewport, letterboxed + centered, without blurring the pixel art. */
-    canvas { position: absolute; inset: 0; width: 100%; height: 100%;
+       viewport, letterboxed + centered, without blurring the pixel art.
+       width/height are !important on purpose: SDL2's Emscripten backend stamps an
+       explicit inline px size (the 800x600 window) onto the canvas on every
+       fullscreen-change / resize event, and a normal-priority inline style would
+       override our 100% — so after Esc-ing out of fullscreen the canvas was snapping
+       to a small 4:3 box. An author !important rule beats normal inline styles, so
+       this keeps the canvas filling #wrap no matter what SDL writes. */
+    canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important;
       object-fit: contain; background: #000;
       image-rendering: pixelated; outline: none; display: block; }
     #status { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center;
