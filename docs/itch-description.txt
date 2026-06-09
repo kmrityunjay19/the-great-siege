@@ -1,0 +1,18 @@
+Seven Kingdoms: Ancient Adversaries — the classic real-time strategy game, running right in your browser. No install, no download. The full original engine (economy, diplomacy, spies, 10 playable cultures, the AI) compiled to WebAssembly — not a remake.
+
+Build your kingdom, recruit and train units, manage trade and tax, hire independent heroes, run spies into rival courts, and conquer through war or diplomacy.
+
+Controls
+- Left-click to select / interact, right-click to move and command
+- Arrow keys or push the cursor to a screen edge to scroll the map
+- The fullscreen button (top-right) or your browser's fullscreen for big-screen play; Esc exits fullscreen
+
+Tips
+- Loads in two parts — you can start playing while the encyclopedia, scenarios, and tutorial finish downloading in the background.
+- Saves are stored in your browser and survive a reload.
+
+Credits & license
+- Originally developed by Enlight Software; open-sourced and kept alive by the 7kfans community ( https://7kfans.com ) — please support them.
+- Game engine licensed under the GNU GPL v2.
+- Music (c) 1997 Bjorn Lynne & Enlight Software Ltd., used by permission with Seven Kingdoms (see COPYING-Music.txt included with the game).
+- Web port by me — if it gave you a hit of nostalgia, buy me a coffee: https://ko-fi.com/cheetah9960
