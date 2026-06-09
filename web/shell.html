@@ -27,6 +27,34 @@
       border: 1px solid #7a6b4d; border-radius: 5px; cursor: pointer;
       opacity: 0.7; transition: opacity .15s; }
     #fsbtn:hover { opacity: 1; }
+    /* Loading-screen credit line — shown over the (black) canvas while the core
+       data downloads, hidden once the engine boots (onRuntimeInitialized). */
+    #credits { position: absolute; left: 0; right: 0; bottom: 56px; text-align: center;
+      font-size: 12px; line-height: 1.55; z-index: 2; pointer-events: auto;
+      padding: 0 16px; color: #cbb88a; }
+    #credits a { color: #d8c79a; text-decoration: none; border-bottom: 1px dotted #7a6b4d; }
+    #credits a:hover { color: #f0e3b8; }
+    /* Discreet "About & Support" footer link + its panel. Like #fsbtn it lives
+       OUTSIDE #wrap so the browser auto-hides it while #wrap is fullscreen. */
+    #aboutbtn { position: fixed; left: 12px; bottom: 12px; z-index: 10;
+      height: 28px; padding: 0 12px; font: inherit; font-size: 12px; line-height: 26px;
+      color: #d8c79a; background: rgba(28,24,16,0.78); border: 1px solid #7a6b4d;
+      border-radius: 5px; cursor: pointer; opacity: 0.7; transition: opacity .15s; }
+    #aboutbtn:hover { opacity: 1; }
+    #aboutmodal { position: fixed; inset: 0; z-index: 20; display: none;
+      align-items: center; justify-content: center; background: rgba(0,0,0,0.72); }
+    #aboutmodal.open { display: flex; }
+    #aboutpanel { position: relative; max-width: 430px; margin: 16px;
+      padding: 22px 26px; background: #14110a; color: #cbb88a; line-height: 1.55;
+      border: 1px solid #7a6b4d; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); }
+    #aboutpanel h2 { margin: 0 0 12px; font-size: 15px; font-weight: normal; color: #e8d9a8; }
+    #aboutpanel p { margin: 0 0 12px; font-size: 13px; }
+    #aboutpanel p:last-child { margin-bottom: 0; }
+    #aboutpanel a { color: #d8c79a; text-decoration: none; border-bottom: 1px dotted #7a6b4d; }
+    #aboutpanel a:hover { color: #f0e3b8; }
+    #aboutclose { position: absolute; top: 8px; right: 12px; padding: 0; font-size: 20px;
+      line-height: 1; color: #9c8a63; background: none; border: none; cursor: pointer; }
+    #aboutclose:hover { color: #e8d9a8; }
   </style>
 </head>
 <body>
@@ -34,8 +62,28 @@
     <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
     <div id="status">Loading…</div>
     <div id="bar"><div id="barfill"></div></div>
+    <div id="credits">
+      <strong>Seven Kingdoms: Ancient Adversaries</strong> — in your browser, no install.<br>
+      Kept alive by the <a href="https://7kfans.com" target="_blank" rel="noopener">7kfans</a> devs ·
+      web port by me — enjoyed it?
+      <a href="https://ko-fi.com/cheetah9960" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+    </div>
   </div>
   <button id="fsbtn" type="button" title="Fullscreen (Esc to exit)" aria-label="Toggle fullscreen">⛶</button>
+  <button id="aboutbtn" type="button" title="About this port &amp; support">♥ About &amp; Support</button>
+  <div id="aboutmodal" role="dialog" aria-modal="true" aria-label="About &amp; Support">
+    <div id="aboutpanel">
+      <button id="aboutclose" type="button" aria-label="Close">×</button>
+      <h2>Seven Kingdoms: Ancient Adversaries — in your browser</h2>
+      <p>The full original real-time strategy game, compiled to run right in your browser —
+        no install, nothing to download and keep.</p>
+      <p>This classic is kept alive by the
+        <a href="https://7kfans.com" target="_blank" rel="noopener">7kfans</a> developers ↗ —
+        please support them.</p>
+      <p>I ported it to the web. If it gave you a hit of nostalgia,
+        <a href="https://ko-fi.com/cheetah9960" target="_blank" rel="noopener">☕ buy me a coffee</a> ↗.</p>
+    </div>
+  </div>
   <script>
     var statusEl = document.getElementById('status');
     var barEl = document.getElementById('bar');
@@ -94,6 +142,10 @@
       // content (encyclopedia, scenarios, tutorial) in the background so the
       // initial download stays small but those screens still work shortly after.
       onRuntimeInitialized: function () {
+        // The engine is up and the core data is loaded — retire the loading-screen
+        // credit line (the "About & Support" footer link keeps the ask reachable).
+        var creditsEl = document.getElementById('credits');
+        if (creditsEl) creditsEl.style.display = 'none';
         var s = document.createElement('script');
         s.src = 'extras.js';
         s.onerror = function () { console.warn('extras package failed to load'); };
@@ -151,6 +203,28 @@
         } catch (e) {}
         try { Module.canvas && Module.canvas.focus(); } catch (e) {}  // keep key events going to the game
       });
+    })();
+    // "About & Support" — a discreet footer link that opens a dismissible panel
+    // (credit to the 7kfans devs + a tip jar for the web port). Opt-in, so it never
+    // intrudes on the menu or gameplay; auto-hidden by the browser while fullscreen.
+    (function () {
+      var btn = document.getElementById('aboutbtn');
+      var modal = document.getElementById('aboutmodal');
+      var closeBtn = document.getElementById('aboutclose');
+      if (!btn || !modal) return;
+      var open = function () { modal.classList.add('open'); };
+      var close = function () {
+        modal.classList.remove('open');
+        try { Module.canvas && Module.canvas.focus(); } catch (e) {}  // keys back to the game
+      };
+      btn.addEventListener('click', open);
+      if (closeBtn) closeBtn.addEventListener('click', close);
+      modal.addEventListener('click', function (e) { if (e.target === modal) close(); });  // backdrop
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && modal.classList.contains('open')) {
+          e.preventDefault(); e.stopPropagation(); close();   // swallow Esc so it doesn't reach the game
+        }
+      }, true);
     })();
   </script>
   {{{ SCRIPT }}}

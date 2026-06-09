@@ -1,4 +1,4 @@
-From f49ed9a3d6b9467bc12c385a6a5cc9268288143d Mon Sep 17 00:00:00 2001
+From 7ac7ae96e36ce2acaa11bc9940f2a3de8afe310d Mon Sep 17 00:00:00 2001
 From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
 Date: Tue, 9 Jun 2026 10:32:06 +0100
 Subject: [PATCH 5/5] web: Emscripten integration -- async-extras re-detect,
@@ -9,13 +9,13 @@ Mostly #ifdef __EMSCRIPTEN__. web_rescan_data_dirs() re-runs set_game_dir() afte
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ---
  include/OSYS.h   |   8 ++
- src/OGAMMAIN.cpp |  49 ++++++++++
+ src/OGAMMAIN.cpp |  53 +++++++++++
  src/OGAMSCEN.cpp |   7 ++
  src/OINGMENU.cpp |   6 ++
  src/OSYS.cpp     |  52 +++++++++++
  src/OTUTOR.cpp   |   6 ++
  src/donate_img.h | 230 +++++++++++++++++++++++++++++++++++++++++++++++
- 7 files changed, 358 insertions(+)
+ 7 files changed, 362 insertions(+)
  create mode 100644 src/donate_img.h
 
 diff --git a/include/OSYS.h b/include/OSYS.h
@@ -45,24 +45,28 @@ index 7197b06..ca70f1b 100644
  extern char debug2_enable_flag;
  extern File seedCompareFile;
 diff --git a/src/OGAMMAIN.cpp b/src/OGAMMAIN.cpp
-index 55b3d82..2700e95 100644
+index 55b3d82..f3f19a3 100644
 --- a/src/OGAMMAIN.cpp
 +++ b/src/OGAMMAIN.cpp
-@@ -38,6 +38,9 @@
+@@ -38,6 +38,13 @@
  #include <OGAME.h>
  #include <OVGALOCK.h>
  #include "gettext.h"
-+#ifdef __EMSCRIPTEN__
++// Web menu "Donate" link — DISABLED in favor of the shell-side loading-screen
++// message + "About & Support" footer panel (web/shell.html). Flip to 1 to
++// restore the in-menu gold Donate bitmap.
++#define WEB_MENU_DONATE 0
++#if defined(__EMSCRIPTEN__) && WEB_MENU_DONATE
 +#include "donate_img.h"		// gold "Donate" link bitmap (normal + hover)
 +#endif
  
  #ifdef DEMO
  #define DISABLE_MULTI_PLAYER
-@@ -105,10 +108,31 @@ void Game::main_menu()
+@@ -105,10 +112,31 @@ void Game::main_menu()
  	char *darkBitmap = NULL;
  	int pointingOption = -1;
  
-+#ifdef __EMSCRIPTEN__
++#if defined(__EMSCRIPTEN__) && WEB_MENU_DONATE
 +	// Bottom-left "Donate" text link, mirroring the version string on the right
 +	// (same gold font_news). Drawn each refresh; click opens the donation page.
 +	// gold "Donate" link bitmap (pre-rendered, donate_img.h), centered below QUIT
@@ -90,11 +94,11 @@ index 55b3d82..2700e95 100644
  		//------- Display game title and paint menu box --------//
  
  		if( refreshFlag )
-@@ -218,6 +242,14 @@ void Game::main_menu()
+@@ -218,6 +246,14 @@ void Game::main_menu()
  		}
  		// ######### end Gilbert 23/7 ##########//
  
-+#ifdef __EMSCRIPTEN__
++#if defined(__EMSCRIPTEN__) && WEB_MENU_DONATE
 +		// gold Donate link, redrawn every frame (the menu page-flips, so a one-shot
 +		// draw wouldn't persist); brighter bitmap on hover. index 0 = transparent.
 +		vga_front.put_bitmap_trans( donateX1, donateY1,
@@ -105,11 +109,11 @@ index 55b3d82..2700e95 100644
  		sys.blt_virtual_buf();		// blt the virtual front buffer to the screen
  
  		//---------- detect buttons -----------//
-@@ -259,6 +291,12 @@ void Game::main_menu()
+@@ -259,6 +295,12 @@ void Game::main_menu()
  			}
  		}
  
-+#ifdef __EMSCRIPTEN__
++#if defined(__EMSCRIPTEN__) && WEB_MENU_DONATE
 +		// gold Donate link (centered, below QUIT)
 +		if( mouse.single_click( donateX1-4, donateY1-2, donateX2+4, donateY2+2 ) )
 +			web_open_donate();
@@ -118,7 +122,7 @@ index 55b3d82..2700e95 100644
  		// method to start a game replay at this time
  		if( mouse.is_key_event() && mouse.scan_code == 'r')
  		{
-@@ -268,8 +306,15 @@ void Game::main_menu()
+@@ -268,8 +310,15 @@ void Game::main_menu()
  
  		//-------------------------------------//
  
@@ -134,7 +138,7 @@ index 55b3d82..2700e95 100644
  	}
  
  	//--------------------------------------//
-@@ -351,7 +396,11 @@ void Game::run_main_menu_option(int optionId)
+@@ -351,7 +400,11 @@ void Game::run_main_menu_option(int optionId)
  	// ####### begin Gilbert 7/11 #########//
  	if( optionId==6 )
  	{
