@@ -24,3 +24,6 @@ node_modules/
 .DS_Store
 *.swp
 .gstack/
+
+# local-only release scratch (Reddit announcement draft — not for the public repo)
+docs/reddit-post.md
