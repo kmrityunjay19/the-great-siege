@@ -1,7 +1,7 @@
-From 7ac7ae96e36ce2acaa11bc9940f2a3de8afe310d Mon Sep 17 00:00:00 2001
+From 4a21eb860e9c6b664fcf9087c086a95c76f76766 Mon Sep 17 00:00:00 2001
 From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
 Date: Tue, 9 Jun 2026 10:32:06 +0100
-Subject: [PATCH 5/6] web: Emscripten integration -- async-extras re-detect,
+Subject: [PATCH 5/7] web: Emscripten integration -- async-extras re-detect,
  Donate link, fullscreen
 
 Mostly #ifdef __EMSCRIPTEN__. web_rescan_data_dirs() re-runs set_game_dir() after the async extras.data mounts (re-enables encyclopedia/scenario/tutorial/music); the menu re-checks the encyclopedia flag live. A gold Donate bitmap (donate_img.h) is blitted on the menu and opens ko-fi; Quit drops fullscreen instead of freezing the tab; scenario/tutorial show a 'still downloading' note until extras arrive.

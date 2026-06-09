@@ -1,0 +1,110 @@
+From 4db962556e448dad8217fb4ad1b73a7674c413b3 Mon Sep 17 00:00:00 2001
+From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
+Date: Tue, 9 Jun 2026 16:06:17 +0100
+Subject: [PATCH 7/7] input: touch pointer-injection shims for web
+ mobile/tablet mode
+
+Add web_pointer_move / web_pointer_button / web_scroll_gesture / web_scroll_end /
+web_key_press (all #ifdef __EMSCRIPTEN__, exported via EMSCRIPTEN_KEEPALIVE) so the
+web shell can own touch input: it maps logical 800x600 coords (undoing the letterbox
+and the optional 90-degree tablet rotation) and injects them through the same Mouse
+methods the SDL pump uses, so injected clicks behave like native ones. Also disable
+SDL's touch<->mouse synthesis on web (OVGA.cpp) so injected taps don't double-fire.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ src/OSYS.cpp | 57 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/OVGA.cpp |  9 +++++++++
+ 2 files changed, 66 insertions(+)
+
+diff --git a/src/OSYS.cpp b/src/OSYS.cpp
+index 58d088f..9aafcd3 100644
+--- a/src/OSYS.cpp
++++ b/src/OSYS.cpp
+@@ -2933,6 +2933,63 @@ extern "C" EMSCRIPTEN_KEEPALIVE int web_is_menu()
+ {
+    return game.game_mode == GAME_PREGAME ? 1 : 0;
+ }
++
++//-------- web_pointer_move / web_pointer_button ----------//
++//
++// In mobile/touch mode the web shell OWNS pointer input: it computes LOGICAL
++// 800x600 coords itself -- undoing the letterbox and the optional 90-degree
++// rotation it applies for tablets -- and injects them here, rather than relying on
++// SDL's canvas-rect mouse mapping (which a CSS-rotated canvas would break). These
++// drive the exact same Mouse methods the SDL event pump uses (OVGA.cpp), so an
++// injected click is indistinguishable from a native one. Safe to call from JS via
++// ccall: the build is single-threaded and ASYNCIFY only yields between frames, so
++// these never run mid-event-processing.
++//
++extern "C" EMSCRIPTEN_KEEPALIVE void web_pointer_move(int lx, int ly)
++{
++   mouse.process_mouse_motion(lx, ly);   // MOUSE_INPUT_ABS: sets cur_x/cur_y + repaints cursor
++}
++
++// button: 0 = left, 1 = right ; down: 1 = press, 0 = release.
++extern "C" EMSCRIPTEN_KEEPALIVE void web_pointer_button(int button, int down)
++{
++   MouseEventType type;
++   if( button == 1 )
++      type = down ? RIGHT_BUTTON : RIGHT_BUTTON_RELEASE;
++   else
++      type = down ? LEFT_BUTTON : LEFT_BUTTON_RELEASE;
++   mouse.add_event(type);
++   if( type == LEFT_BUTTON_RELEASE )
++      mouse.reset_boundary();            // mirror the SDL pump (OVGA.cpp) -- box-select needs this
++}
++
++//-------- web_scroll_gesture / web_scroll_end ----------//
++//
++// Two-finger pan. nx/ny are the gesture centroid normalized to [0,1], exactly as
++// SDL_MULTIGESTURE feeds process_scroll(); the engine accumulates the delta and
++// World::detect_scroll() consumes it. end_scroll() resets the gesture state on lift.
++//
++extern "C" EMSCRIPTEN_KEEPALIVE void web_scroll_gesture(double nx, double ny)
++{
++   mouse.process_scroll(nx, ny);
++}
++
++extern "C" EMSCRIPTEN_KEEPALIVE void web_scroll_end()
++{
++   mouse.end_scroll();
++}
++
++//-------- web_key_press ----------//
++//
++// On-screen buttons (e.g. ESC/back) for touch users who have no keyboard.
++// sdlKeysym is an SDL keycode (SDLK_*, e.g. SDLK_ESCAPE = 0x1B); mirrors the
++// keydown path in the SDL pump (OVGA.cpp).
++//
++extern "C" EMSCRIPTEN_KEEPALIVE void web_key_press(int sdlKeysym)
++{
++   mouse.update_skey_state();
++   mouse.add_key_event((unsigned) sdlKeysym, misc.get_time());
++}
+ #endif
+ 
+ 
+diff --git a/src/OVGA.cpp b/src/OVGA.cpp
+index 2f751c0..d6847cf 100644
+--- a/src/OVGA.cpp
++++ b/src/OVGA.cpp
+@@ -114,6 +114,15 @@ int Vga::init()
+ 
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1");
++#ifdef __EMSCRIPTEN__
++   // The web shell owns touch input (see web_pointer_* in OSYS.cpp): in mobile mode
++   // it injects logical coords directly so it can apply a 90-degree rotation for
++   // tablets and recognise gestures. Disable SDL's touch<->mouse synthesis so a tap
++   // isn't ALSO delivered as a raw mouse event (which would double-fire and fight
++   // the shell's own coordinate mapping). Desktop is unaffected (guarded, no touch).
++   SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
++   SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
++#endif
+    if( config_adv.vga_keep_aspect_ratio )
+       SDL_RenderSetLogicalSize(renderer, VGA_WIDTH, VGA_HEIGHT);
+ 
+-- 
+2.54.0
+

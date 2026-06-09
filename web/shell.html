@@ -62,11 +62,37 @@
     #aboutclose { position: absolute; top: 8px; right: 12px; padding: 0; font-size: 20px;
       line-height: 1; color: #9c8a63; background: none; border: none; cursor: pointer; }
     #aboutclose:hover { color: #e8d9a8; }
+    /* ---- Mobile / tablet mode (gated on body.mobile; see the mobile IIFE) ---- */
+    /* Full-viewport transparent surface that captures all touch once the game is
+       interactive, so we can map coords ourselves (rotation-aware) and inject them
+       via the web_pointer_* shims. Above the canvas; below the fixed corner buttons. */
+    #touchlayer { position: absolute; inset: 0; z-index: 5; display: none;
+      touch-action: none; -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent; }
+    body.mobile.ready #touchlayer { display: block; }
+    /* 90° rotation for portrait tablets — rotate ONLY the canvas (the touch surface
+       stays full-viewport; coords are mapped analytically in JS). object-fit:contain
+       still letterboxes the 800x600 buffer inside the rotated box. */
+    body.rot90 #canvas { width: 100vh !important; height: 100vw !important;
+      top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(90deg);
+      transform-origin: center center; }
+    /* Rotate-override + on-screen menu/back buttons. Like #fsbtn they live OUTSIDE
+       #wrap so they stay upright in the corners and auto-hide in fullscreen. */
+    #rotbtn, #menubtn { position: fixed; z-index: 10; display: none;
+      width: 34px; height: 34px; padding: 0; font-size: 16px; line-height: 32px;
+      text-align: center; color: #d8c79a; background: rgba(28,24,16,0.78);
+      border: 1px solid #7a6b4d; border-radius: 5px; cursor: pointer;
+      opacity: 0.7; transition: opacity .15s; }
+    #rotbtn:hover, #menubtn:hover { opacity: 1; }
+    #rotbtn { top: 10px; right: 54px; }
+    #menubtn { top: 10px; left: 12px; }
+    body.mobile #rotbtn { display: block; }
   </style>
 </head>
 <body>
   <div id="wrap">
     <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="touchlayer"></div>
     <div id="status">Loading…</div>
     <div id="bar"><div id="barfill"></div></div>
     <div id="credits">
@@ -77,6 +103,8 @@
     </div>
   </div>
   <button id="fsbtn" type="button" title="Fullscreen (Esc to exit)" aria-label="Toggle fullscreen">⛶</button>
+  <button id="rotbtn" type="button" title="Screen rotation: auto" aria-label="Rotate screen 90 degrees">⟳</button>
+  <button id="menubtn" type="button" title="Menu / Back (Esc)" aria-label="Menu / Back">☰</button>
   <button id="aboutbtn" type="button" title="About this port &amp; support">♥ About &amp; Support</button>
   <div id="aboutmodal" role="dialog" aria-modal="true" aria-label="About &amp; Support">
     <div id="aboutpanel">
@@ -155,6 +183,7 @@
         // credit line (the "About & Support" footer link keeps the ask reachable).
         var creditsEl = document.getElementById('credits');
         if (creditsEl) creditsEl.style.display = 'none';
+        document.body.classList.add('ready');   // activate the mobile touch overlay (game is now interactive)
         var s = document.createElement('script');
         s.src = 'extras.js';
         s.onerror = function () { console.warn('extras package failed to load'); };
@@ -193,11 +222,17 @@
           if (document.hidden) flush();
         });
         // "About & Support" overlaps the in-game UI (news bar / version string), so
-        // only show it on the main menu (engine game_mode == GAME_PREGAME).
+        // only show it on the main menu (engine game_mode == GAME_PREGAME). The
+        // on-screen mobile menu/back button is the inverse — only useful in-game.
         var aboutBtn = document.getElementById('aboutbtn');
+        var menuBtn = document.getElementById('menubtn');
         setInterval(function () {
-          try { if (aboutBtn) aboutBtn.style.display =
-            Module.ccall('web_is_menu', 'number', [], []) ? 'inline-block' : 'none'; } catch (e) {}
+          try {
+            var inMenu = Module.ccall('web_is_menu', 'number', [], []);
+            if (aboutBtn) aboutBtn.style.display = inMenu ? 'inline-block' : 'none';
+            if (menuBtn) menuBtn.style.display =
+              (document.body.classList.contains('mobile') && !inMenu) ? 'block' : 'none';
+          } catch (e) {}
         }, 400);
       }
     };
@@ -209,6 +244,8 @@
       var btn = document.getElementById('fsbtn');
       var wrap = document.getElementById('wrap');
       if (!btn || !wrap) return;
+      // iPhone Safari has no element fullscreen — hide the button there so it isn't dead.
+      if (!(wrap.requestFullscreen || wrap.webkitRequestFullscreen)) { btn.style.display = 'none'; return; }
       btn.addEventListener('click', function () {
         try {
           if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -240,6 +277,153 @@
         if (e.key === 'Escape' && modal.classList.contains('open')) {
           e.preventDefault(); e.stopPropagation(); close();   // swallow Esc so it doesn't reach the game
         }
+      }, true);
+    })();
+    // ---- Mobile / tablet mode -------------------------------------------------
+    // On touch devices we OWN pointer input: capture touches on #touchlayer, map the
+    // screen point to logical 800x600 (undoing the letterbox + the optional 90°
+    // tablet rotation), and inject via the web_pointer_* shims. Plus: auto-rotate in
+    // portrait with a manual override, and an on-screen ESC button. Everything is
+    // gated on a MOBILE latch (pointer:coarse or first touch) so the desktop mouse/
+    // keyboard path is completely untouched. (Hybrid touch+mouse laptops: once the
+    // overlay is up it owns the play area for touch; mouse there is best-effort.)
+    (function () {
+      var MOBILE = false;
+      try { MOBILE = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); } catch (e) {}
+
+      // ccall wrappers — silently no-op until the wasm runtime is up.
+      function call() { try { return Module.ccall.apply(Module, arguments); } catch (e) {} }
+      function pMove(lx, ly) { call('web_pointer_move', null, ['number', 'number'], [lx | 0, ly | 0]); }
+      function pBtn(btn, down) { call('web_pointer_button', null, ['number', 'number'], [btn, down]); }
+      function pScroll(nx, ny) { call('web_scroll_gesture', null, ['number', 'number'], [nx, ny]); }
+      function pScrollEnd() { call('web_scroll_end', null, [], []); }
+      function keyPress(k) { call('web_key_press', null, ['number'], [k]); }
+
+      // screen (client px) -> logical 800x600, rotation- and letterbox-aware.
+      var VGA_W = 800, VGA_H = 600, MAX_X = 795, MAX_Y = 595;
+      function isRot() { return document.body.classList.contains('rot90'); }
+      function clamp(v, hi) { return v < 0 ? 0 : (v > hi ? hi : v); }
+      function mapPoint(px, py) {
+        var VW = window.innerWidth, VH = window.innerHeight, ew, eh, ex, ey;
+        if (isRot()) {
+          // Canvas box is VH wide x VW tall, rotated 90° clockwise about centre.
+          // Inverting that CSS transform: ex = py, ey = VW - px.
+          ew = VH; eh = VW; ex = py; ey = VW - px;
+        } else {
+          ew = VW; eh = VH; ex = px; ey = py;
+        }
+        // object-fit:contain — fit 800x600 into ew x eh, centred (offsets = black bars).
+        var scale = Math.min(ew / VGA_W, eh / VGA_H);
+        var ox = (ew - VGA_W * scale) / 2, oy = (eh - VGA_H * scale) / 2;
+        return {
+          lx: clamp((ex - ox) / scale, MAX_X),
+          ly: clamp((ey - oy) / scale, MAX_Y),
+          nx: ew ? ex / ew : 0, ny: eh ? ey / eh : 0
+        };
+      }
+
+      // gesture state machine
+      var MOVE_TOL = 12, LONGPRESS_MS = 400;
+      var mode = 'idle', sx = 0, sy = 0, lpTimer = null;
+      function clearLP() { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } }
+      function onLongPress() {
+        if (mode !== 'pending') return;
+        mode = 'right';
+        var p = mapPoint(sx, sy);
+        pMove(p.lx, p.ly); pBtn(1, 1); pBtn(1, 0);          // right-click = in-game command
+        try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) {}
+      }
+      function onStart(e) {
+        e.preventDefault();
+        var ts = e.touches;
+        if (ts.length === 1) {
+          sx = ts[0].clientX; sy = ts[0].clientY;
+          var p = mapPoint(sx, sy); pMove(p.lx, p.ly);
+          mode = 'pending'; clearLP(); lpTimer = setTimeout(onLongPress, LONGPRESS_MS);
+        } else if (ts.length >= 2) {
+          clearLP();
+          if (mode === 'drag') pBtn(0, 0);                  // a 2nd finger cancels a left-drag
+          mode = 'pan';
+        }
+      }
+      function onMove(e) {
+        e.preventDefault();
+        var ts = e.touches;
+        if (mode === 'pan' && ts.length >= 2) {
+          var p = mapPoint((ts[0].clientX + ts[1].clientX) / 2, (ts[0].clientY + ts[1].clientY) / 2);
+          pScroll(p.nx, p.ny); return;
+        }
+        if (ts.length !== 1) return;
+        var dx = ts[0].clientX - sx, dy = ts[0].clientY - sy;
+        if (mode === 'pending' && dx * dx + dy * dy >= MOVE_TOL * MOVE_TOL) {
+          clearLP(); mode = 'drag'; pBtn(0, 1);             // begin a left-drag (box select) from the press point
+        }
+        if (mode === 'drag') { var q = mapPoint(ts[0].clientX, ts[0].clientY); pMove(q.lx, q.ly); }
+      }
+      function onEnd(e) {
+        e.preventDefault();
+        if (e.touches.length === 0) {
+          if (mode === 'pending') {                         // tap = left click
+            clearLP(); var p = mapPoint(sx, sy); pMove(p.lx, p.ly); pBtn(0, 1); pBtn(0, 0);
+          } else if (mode === 'drag') { pBtn(0, 0); }        // release completes the box select
+          else if (mode === 'pan') { pScrollEnd(); }
+          mode = 'idle';
+        } else if (mode === 'pan' && e.touches.length < 2) {
+          pScrollEnd(); mode = 'dead';                      // ignore leftover finger until full release
+        }
+      }
+      var layer = document.getElementById('touchlayer');
+      if (layer) {
+        layer.addEventListener('touchstart', onStart, { passive: false });
+        layer.addEventListener('touchmove', onMove, { passive: false });
+        layer.addEventListener('touchend', onEnd, { passive: false });
+        layer.addEventListener('touchcancel', onEnd, { passive: false });
+      }
+
+      // rotation: auto in portrait + manual override (#rotbtn cycles auto -> on -> off)
+      var rotMode = 'auto', rotWired = false;
+      var ROT_TITLE = { auto: 'Screen rotation: auto', on: 'Screen rotation: on', off: 'Screen rotation: off' };
+      function devicePortrait() {
+        try { if (window.matchMedia('(orientation: portrait)').matches) return true; } catch (e) {}
+        return window.innerHeight > window.innerWidth;
+      }
+      function recomputeRotation() {
+        var rot = rotMode === 'on' || (rotMode === 'auto' && devicePortrait());
+        document.body.classList.toggle('rot90', rot);
+      }
+      function setupRotation() {
+        if (rotWired) return; rotWired = true;
+        try {
+          var mq = window.matchMedia('(orientation: portrait)');
+          if (mq.addEventListener) mq.addEventListener('change', recomputeRotation);
+          else if (mq.addListener) mq.addListener(recomputeRotation);
+        } catch (e) {}
+        window.addEventListener('resize', recomputeRotation);
+        window.addEventListener('orientationchange', recomputeRotation);
+      }
+      var rotBtn = document.getElementById('rotbtn');
+      if (rotBtn) {
+        rotBtn.title = ROT_TITLE.auto;
+        rotBtn.addEventListener('click', function () {
+          rotMode = rotMode === 'auto' ? 'on' : (rotMode === 'on' ? 'off' : 'auto');
+          rotBtn.title = ROT_TITLE[rotMode];
+          recomputeRotation();
+        });
+      }
+
+      // on-screen ESC / back (touch has no keyboard)
+      var menuBtn = document.getElementById('menubtn');
+      if (menuBtn) menuBtn.addEventListener('click', function () { keyPress(0x1B); });  // SDLK_ESCAPE
+
+      function enableMobile() {
+        MOBILE = true;
+        document.body.classList.add('mobile');
+        setupRotation(); recomputeRotation();
+      }
+      if (MOBILE) enableMobile();
+      // Some tablets report pointer:fine — latch on the first touch as a fallback.
+      window.addEventListener('touchstart', function once() {
+        window.removeEventListener('touchstart', once, true); enableMobile();
       }, true);
     })();
   </script>

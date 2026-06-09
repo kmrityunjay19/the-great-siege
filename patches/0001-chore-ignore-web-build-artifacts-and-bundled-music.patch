@@ -1,7 +1,7 @@
-From 78f7803850fe1d120563d5c1cd53045edaf4b7a6 Mon Sep 17 00:00:00 2001
+From 8ed571e1fe5941e5831bad1f17a3585b9c2832ae Mon Sep 17 00:00:00 2001
 From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
 Date: Tue, 9 Jun 2026 10:32:06 +0100
-Subject: [PATCH 1/6] chore: ignore web build artifacts and bundled music
+Subject: [PATCH 1/7] chore: ignore web build artifacts and bundled music
 
 emscripten emits *.wasm beside the autotools targets, and we bundle the re-fetchable 7kaa-music WAVs under data/MUSIC/ (~49MB). Keep both out of git.
 
