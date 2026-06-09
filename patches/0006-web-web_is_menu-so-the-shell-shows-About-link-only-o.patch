@@ -1,0 +1,35 @@
+From ac5950198f1188a41b1b287d494ba81f529a2ddb Mon Sep 17 00:00:00 2001
+From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
+Date: Tue, 9 Jun 2026 11:47:14 +0100
+Subject: [PATCH 6/6] web: web_is_menu() so the shell shows About link only on
+ the menu
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ src/OSYS.cpp | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/OSYS.cpp b/src/OSYS.cpp
+index 3a9a9d0..58d088f 100644
+--- a/src/OSYS.cpp
++++ b/src/OSYS.cpp
+@@ -2923,6 +2923,16 @@ void web_exit_fullscreen()
+ {
+    emscripten_run_script("try{(document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document);}catch(e){}");
+ }
++
++//-------- web_is_menu ----------//
++//
++// 1 while the main menu is showing. The shell shows the "About & Support" link
++// only on the menu (it overlaps the in-game news bar / version string).
++//
++extern "C" EMSCRIPTEN_KEEPALIVE int web_is_menu()
++{
++   return game.game_mode == GAME_PREGAME ? 1 : 0;
++}
+ #endif
+ 
+ 
+-- 
+2.54.0
+
