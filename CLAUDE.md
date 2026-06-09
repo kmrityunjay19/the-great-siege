@@ -30,11 +30,17 @@ the `upstream/` clone, exported to **`patches/*.patch`**. This is how we re-appl
 onto a new 7kaa release (`git am --3way`). See **`MAINTAINING.md`** for the full model and
 backport runbook.
 
+**Two git repos:** the **repo root** is its own git repo (branch `main`) that
+version-controls our infra + `patches/`; the **`upstream/`** engine clone is a *separate*
+repo (branch `web-port`) and is gitignored from the root (as are `emsdk/`, `build/`,
+`node_modules/`). So `git` in the root = our infra; `git` in `upstream/` = the engine
+patchset.
+
 **Whenever you change a file under `upstream/`**, before ending the session: commit it to
 the `web-port` branch (`cd upstream && git add … && git commit`), then run
-**`web/tools/refresh-patches.sh`** so `patches/` mirrors the branch. The root infra
-(`build.sh`, `web/`, `relay/`, `docs/`) is version-independent and is **not** in the
-patchset.
+**`web/tools/refresh-patches.sh`** and commit the refreshed `patches/` in the **root** repo
+too. The root infra (`build.sh`, `web/`, `relay/`, `docs/`) is version-independent and is
+**not** part of the engine patchset.
 
 `upstream/data/` (≈102 MB) ships in the repo and holds everything the game loads at
 runtime: `RESOURCE/` (`.RES` resource DBs incl. fonts `FNT_*`, `CURSOR.RES`),

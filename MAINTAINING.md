@@ -21,6 +21,18 @@ Everything **outside** `upstream/` — `build.sh`, `web/`, `relay/`, `docs/`,
 it's kept as-is across upstream releases (only touched if upstream changes its build
 layout). It is **not** part of the patchset.
 
+**Two git repos.** The **repo root** is its own git repo (branch `main`) that
+version-controls the infra above and `patches/`. The **`upstream/`** engine clone is a
+*separate* repo (branch `web-port`); it is gitignored from the root, along with `emsdk/`
+and `build/` (cloned/built, not committed). So: `git` at the root = our infra + patchset;
+`git` in `upstream/` = the engine. After `refresh-patches.sh`, commit the updated
+`patches/` in the **root** repo so they're protected even if `upstream/` is re-cloned.
+
+**Bootstrapping a fresh checkout** (root repo present, `upstream/` missing): clone the
+engine into `upstream/`, then either `git am --3way patches/*.patch` or — if you kept the
+branch — `git checkout web-port`; install `emsdk/`; `npm install` in `relay/`; re-fetch
+music (below); `./build.sh`.
+
 Two different diffs, two different jobs:
 - **Our patchset** (`patches/`) = what we *carry forward* onto every new version.
 - **Upstream's old→new diff** = only a *conflict preview*; you never apply it. `git am
