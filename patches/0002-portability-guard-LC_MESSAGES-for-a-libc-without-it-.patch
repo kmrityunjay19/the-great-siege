@@ -1,7 +1,7 @@
 From a60b6dff7db44f502f267d585f55d870b46314f1 Mon Sep 17 00:00:00 2001
 From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
 Date: Tue, 9 Jun 2026 10:32:06 +0100
-Subject: [PATCH 2/9] portability: guard LC_MESSAGES for a libc without it
+Subject: [PATCH 02/10] portability: guard LC_MESSAGES for a libc without it
  (Emscripten)
 
 Move <locale.h> out of the ENABLE_NLS guard and #ifndef LC_MESSAGES, which Emscripten's libc omits. The only source change needed to compile the engine to wasm.

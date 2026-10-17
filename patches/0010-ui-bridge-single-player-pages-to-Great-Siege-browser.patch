@@ -1,0 +1,465 @@
+From 026d3d4f807cbf775ac04eb3ee3045f5b946d5f0 Mon Sep 17 00:00:00 2001
+From: Local Build <local-build@localhost>
+Date: Sat, 17 Oct 2026 20:26:55 +0100
+Subject: [PATCH 10/10] ui: bridge single-player pages to Great Siege browser
+ interface
+
+---
+ include/web_siege_ui.h |  25 +++++
+ src/OGAMENCY.cpp       |   6 ++
+ src/OGAMMAIN.cpp       |   3 +
+ src/OGAMSCE2.cpp       |  16 +++
+ src/OGAMSING.cpp       | 236 +++++++++++++++++++++++++++++++++++++++++
+ src/ORACERES.cpp       |   3 +
+ src/OSaveGameArray.cpp |  16 +++
+ src/OTUTOR2.cpp        |   7 ++
+ 8 files changed, 312 insertions(+)
+ create mode 100644 include/web_siege_ui.h
+
+diff --git a/include/web_siege_ui.h b/include/web_siege_ui.h
+new file mode 100644
+index 0000000..e93df06
+--- /dev/null
++++ b/include/web_siege_ui.h
+@@ -0,0 +1,25 @@
++// The Great Siege web presentation bridge. Native game formats remain unchanged.
++#pragma once
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#include <cstdio>
++#include <string>
++extern int siege_page_choice;
++inline void siege_ui_begin(const char* kind,const char* title) {
++ siege_page_choice=-1;
++ EM_ASM({window.siegeUI.open(UTF8ToString($0),UTF8ToString($1));},kind,title);
++}
++inline void siege_ui_item(int id,const char* title,const char* description,const char* art="") {
++ EM_ASM({window.siegeUI.item($0,UTF8ToString($1),UTF8ToString($2),UTF8ToString($3));},id,title,description?description:"",art);
++}
++inline int siege_ui_wait() {
++ while(siege_page_choice<0) emscripten_sleep(16);
++ int result=siege_page_choice;
++ EM_ASM({window.siegeUI.close();});
++ return result;
++}
++inline std::string siege_read_text(const char* path) {
++ std::string text;FILE* f=fopen(path,"rb");if(!f)return text;
++ char buffer[4096];size_t n;while((n=fread(buffer,1,sizeof(buffer),f)))text.append(buffer,n);fclose(f);return text;
++}
++#endif
+diff --git a/src/OGAMENCY.cpp b/src/OGAMENCY.cpp
+index 87abb5f..356caf3 100644
+--- a/src/OGAMENCY.cpp
++++ b/src/OGAMENCY.cpp
+@@ -30,6 +30,7 @@
+ #include <OMOUSECR.h>
+ #include <OVGALOCK.h>
+ #include <OGAME.h>
++#include <web_siege_ui.h>
+ #include <OMUSIC.h>
+ 
+ //--------- define constant ---------//
+@@ -141,6 +142,11 @@ static int  disp_picture( int selClass, int selSubClass, int firstDisp=0);
+ 
+ void Game::view_encyclopedia()
+ {
++#ifdef __EMSCRIPTEN__
++	siege_ui_begin("encyclopedia","Encyclopedia");
++	siege_ui_wait();
++	return;
++#endif
+ 	music.stop();			// no music for encyclopedia as it reads files from the CDROM
+ 
+ 	//---- load the interface into the back buffer ----//
+diff --git a/src/OGAMMAIN.cpp b/src/OGAMMAIN.cpp
+index f2ce200..c001def 100644
+--- a/src/OGAMMAIN.cpp
++++ b/src/OGAMMAIN.cpp
+@@ -38,6 +38,7 @@
+ #include <OGAME.h>
+ #include <OVGALOCK.h>
+ #include "gettext.h"
++#include <web_siege_ui.h>
+ // Web menu "Donate" link — DISABLED in favor of the shell-side loading-screen
+ // message + "About & Support" footer panel (web/shell.html). Flip to 1 to
+ // restore the in-menu gold Donate bitmap.
+@@ -55,6 +56,8 @@
+ #include <emscripten.h>
+ // Browser presentation is separate from the unchanged single-player engine.
+ static int siege_pending_action = 0;
++int siege_page_choice=-1;
++extern "C" EMSCRIPTEN_KEEPALIVE void web_page_choose(int id) { if(id>=0) siege_page_choice=id; }
+ extern "C" EMSCRIPTEN_KEEPALIVE void web_menu_action(int action)
+ {
+ 	if (action >= 1 && action <= 5) siege_pending_action = action;
+diff --git a/src/OGAMSCE2.cpp b/src/OGAMSCE2.cpp
+index 82861a7..5c77773 100644
+--- a/src/OGAMSCE2.cpp
++++ b/src/OGAMSCE2.cpp
+@@ -45,6 +45,7 @@
+ #include <OMUSIC.h>
+ // ####### end Gilbert 4/11 #######//
+ #include "gettext.h"
++#include <web_siege_ui.h>
+ 
+ // --------- declare static funtion --------//
+ 
+@@ -181,6 +182,21 @@ int Game::select_scenario(int scenCount, ScenInfo* scenInfoArray)
+ 
+ 	//-------------------------------------//
+ 
++#ifdef __EMSCRIPTEN__
++	siege_ui_begin("campaign","Campaign");
++	EM_ASM({window.siegeUI.commander(UTF8ToString($0));},config.player_name);
++	for(int i=0;i<scenCount;++i) {
++		String path(DIR_SCENARIO_PATH(scenInfoArray[i].dir_id));
++		char textName[32];misc.change_file_ext(textName,scenInfoArray[i].file_name,"SCT");path+=textName;
++		std::string description=siege_read_text(path);
++		String detail("Difficulty: ");detail+=scenInfoArray[i].goal_difficulty;
++		detail+=" | Score bonus: ";detail+=scenInfoArray[i].goal_score_bonus;
++		description=std::string((const char*)detail)+"\n\n"+description;
++		siege_ui_item(i+1,scenInfoArray[i].scen_name,description.c_str(),scenInfoArray[i].file_name);
++	}
++	const int selected=siege_ui_wait();
++	return selected>=1 && selected<=scenCount ? selected : 0;
++#endif
+ 	// ##### begin Gilbert 4/11 ########//
+ 	// stop any music
+ 	music.stop();
+diff --git a/src/OGAMSING.cpp b/src/OGAMSING.cpp
+index ae87cad..e54ef9a 100644
+--- a/src/OGAMSING.cpp
++++ b/src/OGAMSING.cpp
+@@ -33,6 +33,7 @@
+ #include <OGET.h>
+ #include <OBATTLE.h>
+ #include <OGAME.h>
++#include <web_siege_ui.h>
+ #include <OCONFIG.h>
+ #include <OMUSIC.h>
+ #include <OBUTTCUS.h>
+@@ -40,6 +41,238 @@
+ #include <OGETA.h>
+ #include <stdlib.h>
+ 
++#ifdef __EMSCRIPTEN__
++static Config* siege_config_ptr=nullptr;
++static long siege_map_seed=0;
++static void siege_publish_options() {
++ if(!siege_config_ptr)return;
++ EM_ASM({window.siegeUI.option("player_name",UTF8ToString($0));},siege_config_ptr->player_name);
++ EM_ASM({window.siegeUI.option("seed",$0);},siege_map_seed);
++ EM_ASM({window.siegeUI.option("race_id",$0);},siege_config_ptr->race_id);
++ EM_ASM({window.siegeUI.option("player_nation_color",$0);},siege_config_ptr->player_nation_color);
++ EM_ASM({window.siegeUI.option("difficulty_level",$0);},siege_config_ptr->difficulty_level);
++ EM_ASM({window.siegeUI.option("ai_nation_count",$0);},siege_config_ptr->ai_nation_count);
++ EM_ASM({window.siegeUI.option("terrain_set",$0);},siege_config_ptr->terrain_set);
++ EM_ASM({window.siegeUI.option("land_mass",$0);},siege_config_ptr->land_mass);
++ EM_ASM({window.siegeUI.option("explore_whole_map",$0);},siege_config_ptr->explore_whole_map);
++ EM_ASM({window.siegeUI.option("fog_of_war",$0);},siege_config_ptr->fog_of_war);
++ EM_ASM({window.siegeUI.option("start_up_raw_site",$0);},siege_config_ptr->start_up_raw_site);
++ EM_ASM({window.siegeUI.option("start_up_has_mine_nearby",$0);},siege_config_ptr->start_up_has_mine_nearby);
++ EM_ASM({window.siegeUI.option("start_up_independent_town",$0);},siege_config_ptr->start_up_independent_town);
++ EM_ASM({window.siegeUI.option("independent_town_resistance",$0);},siege_config_ptr->independent_town_resistance);
++ EM_ASM({window.siegeUI.option("new_independent_town_emerge",$0);},siege_config_ptr->new_independent_town_emerge);
++ EM_ASM({window.siegeUI.option("new_nation_emerge",$0);},siege_config_ptr->new_nation_emerge);
++ EM_ASM({window.siegeUI.option("random_event_frequency",$0);},siege_config_ptr->random_event_frequency);
++ EM_ASM({window.siegeUI.option("monster_type",$0);},siege_config_ptr->monster_type);
++ EM_ASM({window.siegeUI.option("random_start_up",$0);},siege_config_ptr->random_start_up);
++ EM_ASM({window.siegeUI.option("start_up_cash",$0);},siege_config_ptr->start_up_cash);
++ EM_ASM({window.siegeUI.option("ai_start_up_cash",$0);},siege_config_ptr->ai_start_up_cash);
++ EM_ASM({window.siegeUI.option("ai_aggressiveness",$0);},siege_config_ptr->ai_aggressiveness);
++ EM_ASM({window.siegeUI.option("goal_destroy_monster",$0);},siege_config_ptr->goal_destroy_monster);
++ EM_ASM({window.siegeUI.option("goal_population_flag",$0);},siege_config_ptr->goal_population_flag);
++ EM_ASM({window.siegeUI.option("goal_population",$0);},siege_config_ptr->goal_population);
++ EM_ASM({window.siegeUI.option("goal_economic_score_flag",$0);},siege_config_ptr->goal_economic_score_flag);
++ EM_ASM({window.siegeUI.option("goal_economic_score",$0);},siege_config_ptr->goal_economic_score);
++ EM_ASM({window.siegeUI.option("goal_total_score_flag",$0);},siege_config_ptr->goal_total_score_flag);
++ EM_ASM({window.siegeUI.option("goal_total_score",$0);},siege_config_ptr->goal_total_score);
++ EM_ASM({window.siegeUI.option("goal_year_limit_flag",$0);},siege_config_ptr->goal_year_limit_flag);
++ EM_ASM({window.siegeUI.option("goal_year_limit",$0);},siege_config_ptr->goal_year_limit);
++}
++extern "C" EMSCRIPTEN_KEEPALIVE void web_option_name(const char* name) {
++ Config* destination=siege_config_ptr?siege_config_ptr:&config;
++ strncpy(destination->player_name,name,HUMAN_NAME_LEN);destination->player_name[HUMAN_NAME_LEN]=0;
++ if(!destination->player_name[0])strcpy(destination->player_name,"New Player");
++}
++extern "C" EMSCRIPTEN_KEEPALIVE void web_option(const char* name,int value) {
++ if(!siege_config_ptr)return;
++ if(!strcmp(name,"seed")) {siege_map_seed=value;siege_publish_options();return;}
++ if(!strcmp(name,"race_id")) {
++  if(value!=6 && value!=8 && value!=2 && value!=7 && value!=9 && value!=10 && value!=4 && value!=5 && value!=3 && value!=1)return;
++  siege_config_ptr->race_id=value;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"player_nation_color")) {
++  if(value!=1 && value!=2 && value!=3 && value!=4 && value!=5 && value!=6 && value!=7)return;
++  siege_config_ptr->player_nation_color=value;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"difficulty_level")) {
++  if(value!=0 && value!=1 && value!=2 && value!=3 && value!=4 && value!=5)return;
++  if(value<OPTION_CUSTOM)siege_config_ptr->change_difficulty(value);else siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"ai_nation_count")) {
++  if(value<1 || value>6)return;
++  siege_config_ptr->ai_nation_count=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"terrain_set")) {
++  if(value!=1 && value!=2 && value!=3)return;
++  siege_config_ptr->terrain_set=value;
++  const short latitudes[3]={45,70,20};siege_config_ptr->latitude=latitudes[value-1];
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"land_mass")) {
++  if(value!=1 && value!=2 && value!=3)return;
++  siege_config_ptr->land_mass=value;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"explore_whole_map")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->explore_whole_map=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"fog_of_war")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->fog_of_war=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"start_up_raw_site")) {
++  if(value<1 || value>10)return;
++  siege_config_ptr->start_up_raw_site=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"start_up_has_mine_nearby")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->start_up_has_mine_nearby=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"start_up_independent_town")) {
++  if(value!=7 && value!=15 && value!=30)return;
++  siege_config_ptr->start_up_independent_town=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"independent_town_resistance")) {
++  if(value!=1 && value!=2 && value!=3)return;
++  siege_config_ptr->independent_town_resistance=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"new_independent_town_emerge")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->new_independent_town_emerge=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"new_nation_emerge")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->new_nation_emerge=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"random_event_frequency")) {
++  if(value!=0 && value!=1 && value!=2 && value!=3)return;
++  siege_config_ptr->random_event_frequency=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"monster_type")) {
++  if(value!=0 && value!=1 && value!=2)return;
++  siege_config_ptr->monster_type=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"random_start_up")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->random_start_up=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"start_up_cash")) {
++  if(value!=1 && value!=2 && value!=3 && value!=4)return;
++  siege_config_ptr->start_up_cash=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"ai_start_up_cash")) {
++  if(value!=1 && value!=2 && value!=3 && value!=4)return;
++  siege_config_ptr->ai_start_up_cash=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"ai_aggressiveness")) {
++  if(value!=1 && value!=2 && value!=3 && value!=4)return;
++  siege_config_ptr->ai_aggressiveness=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"goal_destroy_monster")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->goal_destroy_monster=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"goal_population_flag")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->goal_population_flag=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"goal_population")) {
++  if(value<100 || value>5000)return;
++  siege_config_ptr->goal_population=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"goal_economic_score_flag")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->goal_economic_score_flag=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"goal_economic_score")) {
++  if(value<100 || value>5000)return;
++  siege_config_ptr->goal_economic_score=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"goal_total_score_flag")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->goal_total_score_flag=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"goal_total_score")) {
++  if(value<100 || value>10000)return;
++  siege_config_ptr->goal_total_score=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"goal_year_limit_flag")) {
++  if(value<0 || value>1)return;
++  siege_config_ptr->goal_year_limit_flag=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++ if(!strcmp(name,"goal_year_limit")) {
++  if(value<1 || value>100)return;
++  siege_config_ptr->goal_year_limit=value;
++  siege_config_ptr->difficulty_level=OPTION_CUSTOM;
++  siege_publish_options();return;
++ }
++}
++static int siege_select_options() {
++ Config temporary=config;
++ if(temporary.ai_nation_count<1)temporary.ai_nation_count=MAX_NATION-1;
++ if(temporary.difficulty_level!=OPTION_CUSTOM)temporary.change_difficulty(temporary.difficulty_level);
++ siege_config_ptr=&temporary;siege_map_seed=0;
++ siege_ui_begin("newgame","New game");siege_publish_options();
++ const int result=siege_ui_wait();siege_config_ptr=nullptr;
++ if(result==1) {
++  info.init_random_seed(siege_map_seed);
++  temporary.difficulty_rating=temporary.single_player_difficulty();config=temporary;
++ }
++ if(!vga_front.buf_locked)vga_front.lock_buf();
++ return result==1;
++}
++#endif
++
+ //---------- Define option modes --------//
+ 
+ enum { OPTION_BASIC,
+@@ -151,6 +384,9 @@ static void disp_virtual_tick(ButtonCustom *, int);
+ 
+ static int select_option()
+ {
++#ifdef __EMSCRIPTEN__
++ return siege_select_options();
++#endif
+ 	const int offsetY = 124;
+ 	char optionMode = OPTION_BASIC;
+ 	char menuTitleBitmap[] = "TOP-NSPG";
+diff --git a/src/ORACERES.cpp b/src/ORACERES.cpp
+index f48b796..ee3f2e4 100644
+--- a/src/ORACERES.cpp
++++ b/src/ORACERES.cpp
+@@ -115,6 +115,9 @@ void RaceRes::load_race_info()
+ 		misc.rtrim_fld( raceInfo->code, raceRec->code, raceRec->CODE_LEN );
+ 		misc.rtrim_fld( raceInfo->name, raceRec->name, raceRec->NAME_LEN );
+ 		misc.rtrim_fld( raceInfo->adjective, raceRec->adjective, raceRec->ADJECTIVE_LEN );
++#ifdef __EMSCRIPTEN__
++		if(!strcmp(raceInfo->name,"Mughal")) { strcpy(raceInfo->name,"Marathas");strcpy(raceInfo->adjective,"Maratha"); }
++#endif
+ 
+ 		memcpy( &bitmapOffset, raceRec->icon_bitmap_ptr, sizeof(uint32_t) );
+ 
+diff --git a/src/OSaveGameArray.cpp b/src/OSaveGameArray.cpp
+index 9cad6e5..53cd7ab 100644
+--- a/src/OSaveGameArray.cpp
++++ b/src/OSaveGameArray.cpp
+@@ -47,6 +47,7 @@
+ #include <dbglog.h>
+ #include <ONATIONA.h>
+ #include "gettext.h"
++#include <web_siege_ui.h>
+ 
+ #include <string.h> //strncpy
+ #include <posix_string_compat.h> //strnicmp
+@@ -195,6 +196,21 @@ int SaveGameArray::menu(int actionMode, int *recno)
+ 	}
+ 
+ 	action_mode = actionMode;
++#ifdef __EMSCRIPTEN__
++	if(actionMode==2) {
++		siege_ui_begin("load","Load game");
++		for(int i=1;i<=size();++i) {
++			SaveGame* entry=(*this)[i];
++			String detail("Save file: ");detail+=entry->file_info.name;
++			detail+="\nGame date: ";detail+=date.date_str(entry->header.game_date,1);
++			siege_ui_item(i,entry->header.player_name,detail);
++		}
++		const int selected=siege_ui_wait();
++		if(selected<1 || selected>size())return 0;
++		browse_recno=selected;if(recno)*recno=selected;
++		return process_action(0);
++	}
++#endif
+ 
+ 	if( action_mode==2 && size()==0 )
+ 	{
+diff --git a/src/OTUTOR2.cpp b/src/OTUTOR2.cpp
+index 5bd77a2..4eb6c30 100644
+--- a/src/OTUTOR2.cpp
++++ b/src/OTUTOR2.cpp
+@@ -41,6 +41,7 @@
+ #include <OMUSIC.h>
+ // ####### end Gilbert 4/11 #######//
+ #include "gettext.h"
++#include <web_siege_ui.h>
+ 
+ 
+ // --------- declare static funtion --------//
+@@ -136,6 +137,12 @@ int Tutor::select_tutor(int actionMode)
+ 
+ 	//-------------------------------------//
+ 
++#ifdef __EMSCRIPTEN__
++	siege_ui_begin("training","Training");
++	for(int i=1;i<=tutor_count;++i) siege_ui_item(i,(*this)[i]->des,get_intro(i),(*this)[i]->code);
++	const int selected=siege_ui_wait();
++	return selected>=1 && selected<=tutor_count ? selected : 0;
++#endif
+ 	// ##### begin Gilbert 4/11 ########//
+ 	// stop any music
+ 	music.stop();
+-- 
+2.39.5 (Apple Git-154)
+

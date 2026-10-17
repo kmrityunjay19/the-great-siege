@@ -1,8 +1,8 @@
 From 47c6e58654e0b08fe8007182f112b3f89976bdcb Mon Sep 17 00:00:00 2001
 From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
 Date: Tue, 9 Jun 2026 11:47:14 +0100
-Subject: [PATCH 6/9] web: web_is_menu() so the shell shows About link only on
- the menu
+Subject: [PATCH 06/10] web: web_is_menu() so the shell shows About link only
+ on the menu
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ---

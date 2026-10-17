@@ -126,7 +126,7 @@
       <button class="siege-action primary" data-siege-action="1">New game <small>01 →</small></button>
       <button class="siege-action" data-siege-action="2">Load game <small>02 →</small></button>
       <button class="siege-action" data-siege-action="3">Training <small>03 →</small></button>
-      <button class="siege-action" data-siege-action="4">Scenarios <small>04 →</small></button>
+      <button class="siege-action" data-siege-action="4">Campaign <small>04 →</small></button>
       <button class="siege-action" data-siege-action="5">Encyclopedia <small>05 →</small></button>
       <div id="siege-ready" role="status">Preparing your kingdom…</div>
     </nav>
@@ -153,6 +153,7 @@
       <p id="musiccredit">Original artwork and sound effects remain part of the GPL game data. The separately licensed original soundtrack is not included in this renamed edition. This edition is not endorsed by Enlight Software.</p>
     </div>
   </div>
+  <script src="siege-pages.js"></script>
   <script>
     var siegeRuntimeReady = false;
     var statusEl = document.getElementById('status');
@@ -286,7 +287,7 @@
       if (!siegeRuntimeReady) return;
       try {
         var inMenu = Module.ccall('web_is_menu', 'number', [], []);
-        siegeMenu.hidden = !inMenu;
+        siegeMenu.hidden = !inMenu || (window.siegeUI && window.siegeUI.active);
         document.title = 'The Great Siege';
         var extrasReady = FS.analyzePath('/data/SCENARIO/7FOR7.SCN').exists;
         siegeButtons.forEach(function(button) {
