@@ -1,0 +1,96 @@
+From 4102aa4b8a4ef502b13dd3612fa1360e6919943f Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sat, 17 Oct 2026 22:11:09 +0100
+Subject: [PATCH 15/15] ui: add modern village action bridge
+
+---
+ src/OINFO.cpp | 56 +++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 54 insertions(+), 2 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index c503626..afe57df 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -51,6 +51,8 @@
+ #include <OPOWER.h>
+ #include <OSITE.h>
+ #include <ORAWRES.h>
++#include <ORACERES.h>
++#include <OSKILL.h>
+ #include <OWALLRES.h>
+ #include <OSYS.h>
+ #include <OUNIT.h>
+@@ -170,11 +172,34 @@ static void publish_selected_object()
+ 	{
+ 		Town* townPtr = town_array[town_array.selected_recno];
+ 		if( townPtr->nation_recno == nation_array.player_recno )
++		{
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.townRaceReset(); });
++			for( int raceId=1; raceId<=MAX_RACE; ++raceId )
++			{
++				if( townPtr->race_pop_array[raceId-1] <= 0 )
++					continue;
++				EM_ASM({ if(window.siegeHUD) window.siegeHUD.townRace(
++					$0,UTF8ToString($1),$2,$3,$4,$5,$6); }, raceId,
++					race_res[raceId]->name, townPtr->race_pop_array[raceId-1],
++					townPtr->jobless_race_pop_array[raceId-1],
++					(int)townPtr->race_loyalty_array[raceId-1],
++					townPtr->can_recruit(raceId), townPtr->can_train(raceId));
++			}
++			for( int skillId=1; skillId<=MAX_TRAINABLE_SKILL; ++skillId )
++			{
++				int queueCount=0;
++				for( int q=0; q<townPtr->train_queue_count; ++q )
++					if( townPtr->train_queue_skill_array[q] == skillId )
++						++queueCount;
++				EM_ASM({ if(window.siegeHUD) window.siegeHUD.townQueue($0,$1); },skillId,queueCount);
++			}
+ 			EM_ASM({ if(window.siegeHUD) window.siegeHUD.selection(
+-				"town",UTF8ToString($0),$1,$2,$3,$4,true,"town:"+$5); },
++				"town",UTF8ToString($0),$1,$2,$3,$4,true,"town:"+$5,$6,$7,$8); },
+ 				townPtr->town_name(), townPtr->population, townPtr->jobless_population,
+ 				townPtr->average_loyalty(), townPtr->has_linked_own_camp,
+-				townPtr->town_recno);
++				townPtr->town_recno, townPtr->train_unit_recno!=0,
++				townPtr->auto_collect_tax_loyalty, townPtr->auto_grant_loyalty);
++		}
+ 		else
+ 			EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
+ 				"Settlement",UTF8ToString($0),"Population",$1,"Resistance",$2,
+@@ -218,6 +243,33 @@ static void publish_selected_object()
+ 
+ 	EM_ASM({ if(window.siegeHUD) window.siegeHUD.selection(""); });
+ }
++
++extern "C" EMSCRIPTEN_KEEPALIVE void web_town_command(int action, int value, int raceId)
++{
++	if( !town_array.selected_recno )
++		return;
++	Town* townPtr=town_array[town_array.selected_recno];
++	if( townPtr->nation_recno != nation_array.player_recno )
++		return;
++
++	if( action==1 && raceId>=1 && raceId<=MAX_RACE && townPtr->can_recruit(raceId) )
++		townPtr->recruit(-1,raceId,COMMAND_PLAYER);
++	else if( action==2 && value>=1 && value<=MAX_TRAINABLE_SKILL &&
++		 raceId>=1 && raceId<=MAX_RACE && townPtr->can_train(raceId) )
++		townPtr->add_queue((char)value,(char)raceId,1);
++	else if( action==3 && townPtr->average_loyalty()>COLLECT_TAX_LOYALTY_DECREASE )
++		townPtr->collect_tax(COMMAND_PLAYER);
++	else if( action==4 )
++		townPtr->reward(COMMAND_PLAYER);
++	else if( action==5 )
++		townPtr->cancel_train_unit();
++	else if( action==6 && (value==0 || (value>=30 && value<=100 && value%10==0)) )
++		townPtr->set_auto_collect_tax_loyalty(value);
++	else if( action==7 && (value==0 || (value>=30 && value<=100 && value%10==0)) )
++		townPtr->set_auto_grant_loyalty(value);
++
++	info.disp();
++}
+ #endif
+ 
+ 
+-- 
+2.39.5 (Apple Git-154)
+

@@ -1,7 +1,7 @@
 From dcd033279b7d094ba5c55c9611102e60fd605bd0 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sat, 17 Oct 2026 21:55:47 +0100
-Subject: [PATCH 14/14] ui: add structure-specific browser details
+Subject: [PATCH 14/15] ui: add structure-specific browser details
 
 ---
  src/OINFO.cpp | 99 ++++++++++++++++++++++++++++++++++++++++++---------

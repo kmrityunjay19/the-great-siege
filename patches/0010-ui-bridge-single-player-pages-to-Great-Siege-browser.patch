@@ -1,7 +1,7 @@
 From 026d3d4f807cbf775ac04eb3ee3045f5b946d5f0 Mon Sep 17 00:00:00 2001
 From: Local Build <local-build@localhost>
 Date: Sat, 17 Oct 2026 20:26:55 +0100
-Subject: [PATCH 10/14] ui: bridge single-player pages to Great Siege browser
+Subject: [PATCH 10/15] ui: bridge single-player pages to Great Siege browser
  interface
 
 ---
