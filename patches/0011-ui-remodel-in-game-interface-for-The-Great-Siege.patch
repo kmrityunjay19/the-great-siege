@@ -1,0 +1,463 @@
+From eaf28cec8122ec3dbb80a069850f9ce645f6e013 Mon Sep 17 00:00:00 2001
+From: Local Build <local-build@localhost>
+Date: Sat, 17 Oct 2026 21:21:26 +0100
+Subject: [PATCH 11/11] ui: remodel in-game interface for The Great Siege
+
+---
+ include/web_siege_ui.h |  2 ++
+ src/ConfigAdv.cpp      |  6 +++++-
+ src/OGAMMAIN.cpp       |  1 +
+ src/OINFO.cpp          | 17 +++++++++++++++
+ src/OINGMENU.cpp       | 21 ++++++++++++++++++
+ src/OOPTMENU.cpp       | 49 +++++++++++++++++++++++++++++++++++++++++-
+ src/OSYS.cpp           | 10 +++++++++
+ src/OSYS2.cpp          | 31 ++++++++++++++++++++++++--
+ src/OSaveGameArray.cpp | 17 +++++++++++++++
+ src/OVGA.cpp           | 43 ++++++++++++++++++++++++++++++++++++
+ src/OVGABUF2.cpp       | 10 +++++++++
+ 11 files changed, 203 insertions(+), 4 deletions(-)
+
+diff --git a/include/web_siege_ui.h b/include/web_siege_ui.h
+index e93df06..a58bfb5 100644
+--- a/include/web_siege_ui.h
++++ b/include/web_siege_ui.h
+@@ -5,6 +5,8 @@
+ #include <cstdio>
+ #include <string>
+ extern int siege_page_choice;
++extern int siege_native_dialog_depth;
++struct SiegeNativeDialog { SiegeNativeDialog(){++siege_native_dialog_depth;} ~SiegeNativeDialog(){--siege_native_dialog_depth;} };
+ inline void siege_ui_begin(const char* kind,const char* title) {
+  siege_page_choice=-1;
+  EM_ASM({window.siegeUI.open(UTF8ToString($0),UTF8ToString($1));},kind,title);
+diff --git a/src/ConfigAdv.cpp b/src/ConfigAdv.cpp
+index b76e18b..5cdb1d9 100644
+--- a/src/ConfigAdv.cpp
++++ b/src/ConfigAdv.cpp
+@@ -276,7 +276,11 @@ void ConfigAdv::reset()
+ 	vga_full_screen = 1;
+ #endif
+ 	vga_full_screen_desktop = 1;
+-	vga_keep_aspect_ratio = 1;
++#ifdef __EMSCRIPTEN__
++ vga_keep_aspect_ratio = 0;
++#else
++ vga_keep_aspect_ratio = 1;
++#endif
+ 	vga_pause_on_focus_loss = 0;
+ 
+ 	vga_window_width = 0;
+diff --git a/src/OGAMMAIN.cpp b/src/OGAMMAIN.cpp
+index c001def..72ebe0c 100644
+--- a/src/OGAMMAIN.cpp
++++ b/src/OGAMMAIN.cpp
+@@ -57,6 +57,7 @@
+ // Browser presentation is separate from the unchanged single-player engine.
+ static int siege_pending_action = 0;
+ int siege_page_choice=-1;
++int siege_native_dialog_depth=0;
+ extern "C" EMSCRIPTEN_KEEPALIVE void web_page_choose(int id) { if(id>=0) siege_page_choice=id; }
+ extern "C" EMSCRIPTEN_KEEPALIVE void web_menu_action(int action)
+ {
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 78ff1e6..796f0ba 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -44,6 +44,9 @@
+ #include <OUNIT.h>
+ #include <OCOLTBL.h>
+ #include <OINFO.h>
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#endif
+ #include <OOPTMENU.h>
+ #include "gettext.h"
+ 
+@@ -266,6 +269,12 @@ void Info::next_day()
+ void Info::disp_panel()
+ {
+ 	image_interface.put_to_buf( &vga_back, "MAINSCR" );
++#ifdef __EMSCRIPTEN__
++ // A clean panel base is also captured by the native incremental redraw code.
++ vga_back.bar(576,0,799,599,0x9d);
++ vga_back.rect(577,55,799,257,1,0x9a);
++ vga_back.rect(577,260,799,599,1,0x99);
++#endif
+ 
+ 	//------ keep a copy of bitmap of the panel texture -----//
+ 
+@@ -389,6 +398,14 @@ void Info::update()
+ 
+ void Info::disp_heading()
+ {
++#ifdef __EMSCRIPTEN__
++ if(nation_array.player_recno) {
++  Nation* player=~nation_array;
++  String food(player->food_str()),cash(player->cash_str());
++  EM_ASM({if(window.siegeHUD)window.siegeHUD.update(UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),$3,$4);},(const char*)food,(const char*)cash,date.date_str(game_date,1),(int)player->reputation,sys.view_mode);
++ }
++#endif
++
+ 	//---- display info on the top menu area ----//
+ 
+ 	int x=TOP_MENU_X2-250;
+diff --git a/src/OINGMENU.cpp b/src/OINGMENU.cpp
+index a5ae4b5..8c499bc 100644
+--- a/src/OINGMENU.cpp
++++ b/src/OINGMENU.cpp
+@@ -37,6 +37,10 @@
+ #include <OGAME.h>
+ #include <OOPTMENU.h>
+ #include <OINGMENU.h>
++#include <web_siege_ui.h>
++#ifdef __EMSCRIPTEN__
++static int siege_pause_action=0;
++#endif
+ #include <OFONT.h>
+ #include <OMUSIC.h>
+ #include "gettext.h"
+@@ -96,6 +100,14 @@ void InGameMenu::enter(char untilExitFlag)
+    mouse_cursor.set_icon(CURSOR_NORMAL);
+ 
+    power.win_opened = 1;
++#ifdef __EMSCRIPTEN__
++   siege_ui_begin("pause","Your kingdom awaits");
++   const char* labels[]={"Settings","Save game","Load game","Training","Retire","Main menu","Exit fullscreen","Continue playing"};
++   for(int i=0;i<GAME_OPTION_COUNT;i++)if(game_menu_option_flag[i])siege_ui_item(i+1,labels[i],i==7?"Return to your kingdom.":"Choose this action, then press Confirm.");
++   siege_pause_action=siege_ui_wait();
++   if(!siege_pause_action)siege_pause_action=8;
++#endif
++
+ 
+    if( untilExitFlag )
+    {
+@@ -127,6 +139,9 @@ N_("Large")
+ };
+ void InGameMenu::disp(int needRepaint)
+ {
++#ifdef __EMSCRIPTEN__
++ return;
++#endif
+    if( !active_flag )
+       return;
+ 
+@@ -174,6 +189,10 @@ int InGameMenu::detect()
+    if( !active_flag )
+       return 0;
+ 
++#ifdef __EMSCRIPTEN__
++   int i=siege_pause_action;siege_pause_action=0;
++   if(!i)return 0;
++#else
+    int i, y=GAME_OPTION_Y1, x2, y2;
+ 
+    for( i=1 ; i<=GAME_OPTION_COUNT ; i++, y+=GAME_OPTION_HEIGHT )
+@@ -209,6 +228,8 @@ int InGameMenu::detect()
+ 
+    vga_front.rest_area_common_buf();         // restore the up button
+ 
++   #endif
++
+    //--------- run the option -------//
+ 
+    exit(0);
+diff --git a/src/OOPTMENU.cpp b/src/OOPTMENU.cpp
+index 9405c6b..665201e 100644
+--- a/src/OOPTMENU.cpp
++++ b/src/OOPTMENU.cpp
+@@ -37,7 +37,36 @@
+ #include <OMUSIC.h>
+ #include <OSYS.h>
+ #include <OOPTMENU.h>
+-
++#include <web_siege_ui.h>
++
++
++
++#ifdef __EMSCRIPTEN__
++static Config* siege_settings_ptr=nullptr;
++extern "C" EMSCRIPTEN_KEEPALIVE void web_setting(const char* name,int value) {
++ if(!siege_settings_ptr)return;
++ if(!strcmp(name,"sound_effect_volume") && value>=0 && value<=100)siege_settings_ptr->sound_effect_volume=value;
++ if(!strcmp(name,"frame_speed") && value>=0 && value<=99)siege_settings_ptr->frame_speed=value;
++ if(!strcmp(name,"scroll_speed") && value>=1 && value<=10)siege_settings_ptr->scroll_speed=value;
++ if(!strcmp(name,"help_mode") && value>=0 && value<=2)siege_settings_ptr->help_mode=value;
++ if(!strcmp(name,"disp_news_flag") && value>=0 && value<=1)siege_settings_ptr->disp_news_flag=value;
++ if(!strcmp(name,"show_all_unit_icon") && value>=0 && value<=1)siege_settings_ptr->show_all_unit_icon=value;
++ if(!strcmp(name,"show_unit_path") && value>=0 && value<=3)siege_settings_ptr->show_unit_path=value;
++ if(!strcmp(name,"disp_town_name") && value>=0 && value<=1)siege_settings_ptr->disp_town_name=value;
++ if(!strcmp(name,"disp_spy_sign") && value>=0 && value<=1)siege_settings_ptr->disp_spy_sign=value;
++}
++static void siege_settings_publish() {
++ EM_ASM({window.siegeUI.option("sound_effect_volume",$0);},siege_settings_ptr->sound_effect_volume);
++ EM_ASM({window.siegeUI.option("frame_speed",$0);},siege_settings_ptr->frame_speed);
++ EM_ASM({window.siegeUI.option("scroll_speed",$0);},siege_settings_ptr->scroll_speed);
++ EM_ASM({window.siegeUI.option("help_mode",$0);},siege_settings_ptr->help_mode);
++ EM_ASM({window.siegeUI.option("disp_news_flag",$0);},siege_settings_ptr->disp_news_flag);
++ EM_ASM({window.siegeUI.option("show_all_unit_icon",$0);},siege_settings_ptr->show_all_unit_icon);
++ EM_ASM({window.siegeUI.option("show_unit_path",$0);},siege_settings_ptr->show_unit_path);
++ EM_ASM({window.siegeUI.option("disp_town_name",$0);},siege_settings_ptr->disp_town_name);
++ EM_ASM({window.siegeUI.option("disp_spy_sign",$0);},siege_settings_ptr->disp_spy_sign);
++}
++#endif
+ 
+ enum { BASIC_OPTION_X_SPACE = 78,
+ 		 BASIC_OPTION_HEIGHT = 32 };
+@@ -92,6 +121,24 @@ OptionMenu::OptionMenu() : help_group(3), news_group(2), report_group(2) ,
+ 
+ void OptionMenu::enter(char untilExitFlag)
+ {
++#ifdef __EMSCRIPTEN__
++ if(is_active())return;
++ active_flag=1;power.win_opened=1;
++ Config temporary=config;siege_settings_ptr=&temporary;
++ siege_ui_begin("settings","Settings");siege_settings_publish();
++ int result=siege_ui_wait();siege_settings_ptr=nullptr;
++ if(result==1) {
++  config.change_preference(temporary);
++  config.sound_effect_flag=config.sound_effect_volume>0;
++  audio.set_wav_volume(config.sound_effect_volume);
++  Config fileConfig;if(!fileConfig.load("CONFIG.DAT"))fileConfig.init();
++  fileConfig.change_preference(config);fileConfig.save("CONFIG.DAT");
++ }
++ active_flag=0;power.win_opened=0;
++ sys.need_redraw_flag=1;
++ return;
++#endif
++
+ 	if( is_active() )
+ 		return;
+ 
+diff --git a/src/OSYS.cpp b/src/OSYS.cpp
+index 9aafcd3..c43730f 100644
+--- a/src/OSYS.cpp
++++ b/src/OSYS.cpp
+@@ -22,6 +22,9 @@
+ //Description : System resource management object
+ 
+ #include <cstdio>
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#endif
+ #include <cstdlib>
+ #include <limits.h>
+ #include <stdint.h>
+@@ -2732,7 +2735,11 @@ void Sys::save_game()
+ 
+    if( save_game_array.menu(1) == 1 )
+    {
++#ifdef __EMSCRIPTEN__
++      EM_ASM({if(window.siegeHUD)window.siegeHUD.notice("Game saved successfully");});
++#else
+       box.msg( _("Game Saved Successfully") );
++#endif
+    }
+ 
+    save_game_array.menu(-1);               // restore screen area from back buffer
+@@ -2929,6 +2936,9 @@ void web_exit_fullscreen()
+ // 1 while the main menu is showing. The shell shows the "About & Support" link
+ // only on the menu (it overlaps the in-game news bar / version string).
+ //
++extern "C" EMSCRIPTEN_KEEPALIVE int web_is_playing()
++{ return game.init_flag && (game.game_mode==GAME_SINGLE_PLAYER || game.game_mode==GAME_TUTORIAL || game.game_mode==GAME_CAMPAIGN); }
++
+ extern "C" EMSCRIPTEN_KEEPALIVE int web_is_menu()
+ {
+    return game.game_mode == GAME_PREGAME ? 1 : 0;
+diff --git a/src/OSYS2.cpp b/src/OSYS2.cpp
+index c1e9a80..27cefd9 100644
+--- a/src/OSYS2.cpp
++++ b/src/OSYS2.cpp
+@@ -62,6 +62,11 @@
+ #include <OFIRMDIE.h>
+ #include <OOPTMENU.h>
+ #include <OINGMENU.h>
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++static int siege_hud_pending=0;
++extern "C" EMSCRIPTEN_KEEPALIVE void web_hud_action(int action) { if(action>=0 && action<=12)siege_hud_pending=action+1; }
++#endif
+ #include <CmdLine.h>
+ #include <gettext.h>
+ 
+@@ -390,6 +395,16 @@ void Sys::disp_button()
+ //
+ void Sys::detect_button()
+ {
++#ifdef __EMSCRIPTEN__
++ if(siege_hud_pending) {
++  const int action=siege_hud_pending-1;siege_hud_pending=0;
++  if(action==9)in_game_menu.enter(!remote.is_enable());
++  else if(action>=10 && world.map_matrix)world.map_matrix->toggle_map_mode(action-10);
++  else if(action==0 || nation_array.player_recno || action==MODE_RANK)
++   set_view_mode(view_mode==action?MODE_NORMAL:action);
++  return;
++ }
++#endif
+ 	//--------- detect menu button -------//
+ 
+ 	if( button_menu.detect() )
+@@ -607,7 +622,11 @@ void Sys::disp_view()
+ 		//------- blt the zoom area to the front screen --------//
+ 
+ 		vga.use_back();
+-		Vga::opaque_flag = config.opaque_report;
++		#ifdef __EMSCRIPTEN__
++ Vga::opaque_flag = 1;
++#else
++ Vga::opaque_flag = config.opaque_report;
++#endif
+ 
+ 		switch( view_mode )
+ 		{
+@@ -732,7 +751,11 @@ void Sys::update_view()
+ 		else
+ 		{
+ 			vga.use_back();
+-			Vga::opaque_flag = config.opaque_report;
++			#ifdef __EMSCRIPTEN__
++ Vga::opaque_flag = 1;
++#else
++ Vga::opaque_flag = config.opaque_report;
++#endif
+ 
+ 			switch( view_mode )
+ 			{
+@@ -1008,6 +1031,10 @@ void Sys::disp_zoom()
+ 	//-------- display news messages ---------//
+ 
+ 	news_array.disp();
++#ifdef __EMSCRIPTEN__
++ // Reports have an opaque reading surface; the live world still updates normally.
++ if(view_mode!=MODE_NORMAL)vga_back.bar(ZOOM_X1,ZOOM_Y1,ZOOM_X2,ZOOM_Y2,0x9d);
++#endif
+ 
+ 	//----- next frame, increase the frame counter -----//
+ 
+diff --git a/src/OSaveGameArray.cpp b/src/OSaveGameArray.cpp
+index 53cd7ab..86c02c8 100644
+--- a/src/OSaveGameArray.cpp
++++ b/src/OSaveGameArray.cpp
+@@ -160,6 +160,9 @@ void SaveGameArray::deinit()
+ //
+ int SaveGameArray::menu(int actionMode, int *recno)
+ {
++#ifdef __EMSCRIPTEN__
++ SiegeNativeDialog siegeDialog;
++#endif
+ 	if( actionMode == -2 || actionMode == -1)
+ 	{
+ 		// copy or restore screen to back buffer
+@@ -197,6 +200,20 @@ int SaveGameArray::menu(int actionMode, int *recno)
+ 
+ 	action_mode = actionMode;
+ #ifdef __EMSCRIPTEN__
++ if(actionMode==1) {
++  siege_ui_begin("save","Save game");
++  siege_ui_item(1,"Create a new save","Create a separate save slot. Your existing saves will be kept.");
++  for(int i=1;i<=size();++i) {
++   SaveGame* entry=(*this)[i];
++   String detail("Overwrite file: ");detail+=entry->file_info.name;
++   detail+="\nGame date: ";detail+=date.date_str(entry->header.game_date,1);
++   siege_ui_item(i+1,entry->header.player_name,detail);
++  }
++  int selected=siege_ui_wait();
++  if(selected<1 || selected>size()+1)return 0;
++  browse_recno=selected-1;if(recno)*recno=browse_recno;
++  return process_action(selected==1);
++ }
+ 	if(actionMode==2) {
+ 		siege_ui_begin("load","Load game");
+ 		for(int i=1;i<=size();++i) {
+diff --git a/src/OVGA.cpp b/src/OVGA.cpp
+index d6847cf..961a891 100644
+--- a/src/OVGA.cpp
++++ b/src/OVGA.cpp
+@@ -30,6 +30,14 @@
+ #include <version.h>
+ #include <FilePath.h>
+ #include <ConfigAdv.h>
++#ifdef __EMSCRIPTEN__
++#include <algorithm>
++#include <OGAME.h>
++#include <OINFO.h>
++#include <OOPTMENU.h>
++#include <OBOX.h>
++extern int siege_native_dialog_depth;
++#endif
+ 
+ DBGLOG_DEFAULT_CHANNEL(Vga);
+ 
+@@ -822,6 +830,41 @@ void Vga::flip()
+    if (cur_ticks > ticks + 17 || cur_ticks < ticks) {
+       ticks = cur_ticks;
+       SDL_BlitSurface(vga_front.surface, NULL, target, NULL);
++#ifdef __EMSCRIPTEN__
++      // Presentation only: recolor the interface in the final display copy.
++      // The indexed game buffer, terrain, minimap and serialized state stay intact.
++      if(game.init_flag && game.game_mode!=GAME_PREGAME && game.game_mode!=GAME_ENCYCLOPEDIA && target->format->BytesPerPixel==4) {
++         SDL_Color* palette=vga_front.surface->format->palette->colors;
++         Uint32 themed[256];
++         for(int c=0;c<256;c++) {
++            int r=palette[c].r,g=palette[c].g,b=palette[c].b;
++            int hi=std::max(r,std::max(g,b)),lo=std::min(r,std::min(g,b));
++            int l=(r*30+g*59+b*11)/100;
++            if(hi-lo<65) {
++               if(l<70) { r=226-l/3;g=216-l/3;b=188-l/3; }
++               else if(l<120) { r=107-(l-70)/2;g=110-(l-70)/2;b=91-(l-70)/2; }
++               else { r=19+(255-l)/9;g=31+(255-l)/9;b=34+(255-l)/9; }
++            }
++            // Flat interface surfaces and restrained gold rules replace the old bevels.
++            if(c>=0x90 && c<=0x9f) { r=28;g=43;b=45; }
++            if(c==0x9a || c==0x9e) { r=47;g=64;b=59; }
++            if(c==0x97 || c==0x98 || c==0x99) {r=76;g=91;b=82;}
++            themed[c]=SDL_MapRGB(target->format,r,g,b);
++         }
++         const bool report=sys.view_mode!=MODE_NORMAL;
++         const bool dialog=Box::opened_flag;
++         for(int y=0;y<VGA_HEIGHT;y++) {
++            Uint32* row=(Uint32*)((Uint8*)target->pixels+y*target->pitch);
++            Uint8* original=(Uint8*)vga_front.surface->pixels+y*vga_front.surface->pitch;
++            for(int x=0;x<VGA_WIDTH;x++) {
++               bool map=x>=588 && x<788 && y>=56 && y<256;
++               bool chrome=y<56 || x>=576;
++               bool modal=dialog && x>=box.box_x1 && x<=box.box_x2 && y>=box.box_y1 && y<=box.box_y2;
++               if(!map && (chrome || report || modal))row[x]=themed[original[x]];
++            }
++         }
++      }
++#endif
+       SDL_UpdateTexture(texture, NULL, target->pixels, target->pitch);
+       SDL_RenderClear(renderer);
+       SDL_RenderCopy(renderer, texture, NULL, NULL);
+diff --git a/src/OVGABUF2.cpp b/src/OVGABUF2.cpp
+index 0635aff..816a88d 100644
+--- a/src/OVGABUF2.cpp
++++ b/src/OVGABUF2.cpp
+@@ -532,6 +532,11 @@ void VgaBuf::thick_line(int x1,int y1,int x2,int y2,int lineColor)
+ //
+ void VgaBuf::d3_panel_up(int x1,int y1,int x2,int y2,int t,int paintCentre)
+ {
++#ifdef __EMSCRIPTEN__
++ if(paintCentre)bar(x1,y1,x2,y2,0x9d);
++ rect(x1,y1,x2,y2,1,0x99);
++ return;
++#endif
+ 	// int i,x,y;
+ 
+ 	err_when( x1>x2 || y1>y2 || x1<0 || y1<0 || x2>=VGA_WIDTH || y2>=VGA_HEIGHT );
+@@ -591,6 +596,11 @@ void VgaBuf::d3_panel_up(int x1,int y1,int x2,int y2,int t,int paintCentre)
+ //
+ void VgaBuf::d3_panel_down(int x1,int y1,int x2,int y2,int t,int paintCentre)
+ {
++#ifdef __EMSCRIPTEN__
++ if(paintCentre)bar(x1,y1,x2,y2,0x9d);
++ rect(x1,y1,x2,y2,1,0x99);
++ return;
++#endif
+ 	err_when( x1>x2 || y1>y2 || x1<0 || y1<0 || x2>=VGA_WIDTH || y2>=VGA_HEIGHT );
+ 
+ 	if( is_front )
+-- 
+2.39.5 (Apple Git-154)
+

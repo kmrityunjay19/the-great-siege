@@ -33,6 +33,6 @@ args += ['--js-output='+str(out/'extras.js')]
 subprocess.run(args,check=True)
 print('Built',out/'7kaa.html',flush=True)
 import shutil
-for name in ['siege-pages.js','new-game-fields.json','encyclopedia.json']:
+for name in ['siege-pages.js','siege-hud.js','new-game-fields.json','encyclopedia.json']:
  shutil.copy2(root/'web'/name,out/name)
 shutil.copytree(root/'web/gallery',out/'gallery',dirs_exist_ok=True)
