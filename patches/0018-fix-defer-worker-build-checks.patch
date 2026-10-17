@@ -1,0 +1,75 @@
+From cbc6c5b133eebfe2464aad13e8163b5cf1c64495 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sat, 17 Oct 2026 22:30:26 +0100
+Subject: [PATCH 18/18] fix: defer worker build checks
+
+---
+ src/OINFO.cpp | 32 ++++++++++++++------------------
+ 1 file changed, 14 insertions(+), 18 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 786232d..6457b5d 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -83,8 +83,6 @@ static	char *save_buf_4 = NULL;
+ 
+ #ifdef __EMSCRIPTEN__
+ // Keep the browser-side selection panel synchronized without changing saved games.
+-static int last_web_person_build_recno = 0;
+-static int last_web_person_can_build = 0;
+ static void publish_selected_object()
+ {
+ 	if( firm_array.selected_recno )
+@@ -246,28 +244,16 @@ static void publish_selected_object()
+ 				unitPtr->unit_mode==UNIT_MODE_UNDER_TRAINING ? "Training" : "Ready";
+ 			int isOwn = unitPtr->is_own();
+ 			int isOwnSpy = unitPtr->is_own_spy();
+-			if( last_web_person_build_recno != unit_array.selected_recno )
+-			{
+-				EM_ASM({ if(window.siegeHUD) window.siegeHUD.personBuildReset(); });
+-				last_web_person_build_recno = unit_array.selected_recno;
+-				last_web_person_can_build = 0;
+-				for( int firmId=1; firmId<=MAX_FIRM_TYPE; ++firmId )
+-					if( isOwn && firm_res[firmId]->can_build(unitPtr->sprite_recno) )
+-					{
+-						last_web_person_can_build = 1;
+-						EM_ASM({ if(window.siegeHUD) window.siegeHUD.personBuild(
+-							$0,UTF8ToString($1)); },firmId,firm_res[firmId]->name);
+-					}
+-			}
+ 			int spySkill = unitPtr->spy_recno ? spy_array[unitPtr->spy_recno]->spy_skill : 0;
+ 			int spyNotify = unitPtr->spy_recno ? spy_array[unitPtr->spy_recno]->notify_cloaked_nation_flag : 0;
+-			EM_ASM({ if(window.siegeHUD) window.siegeHUD.person(
++			EM_ASM({ if(window.siegeHUD) try { window.siegeHUD.person(
+ 				UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),UTF8ToString($3),
+ 				$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+-				"unit:"+$21); },unitPtr->unit_name(),role,rank,status,
++				"unit:"+$21); } catch(error) { console.error("Worker panel error",error); } },
++				unitPtr->unit_name(),role,rank,status,
+ 				(int)unitPtr->hit_points,unitPtr->max_hit_points,unitPtr->loyalty,
+ 				unitPtr->skill.combat_level,unitPtr->skill.skill_level,spySkill,isOwn,isOwnSpy,
+-				unitPtr->aggressive_mode,last_web_person_can_build,
++				unitPtr->aggressive_mode,isOwn && unitPtr->skill.skill_id==SKILL_CONSTRUCTION,
+ 				unitPtr->mobile_type==UNIT_LAND && unitPtr->rank_id!=RANK_KING,
+ 				unitPtr->rank_id==RANK_SOLDIER && unitPtr->skill.skill_id==SKILL_LEADING,
+ 				unitPtr->rank_id==RANK_GENERAL,unitPtr->rank_id!=RANK_KING,
+@@ -348,6 +334,16 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_unit_command(int action, int value)
+ 
+ 	info.disp();
+ }
++
++extern "C" EMSCRIPTEN_KEEPALIVE int web_unit_can_build(int firmId)
++{
++	if( !unit_array.selected_recno || firmId<1 || firmId>MAX_FIRM_TYPE )
++		return 0;
++	Unit* unitPtr=unit_array[unit_array.selected_recno];
++	return unitPtr->is_own() && unitPtr->race_id &&
++		unit_res[unitPtr->unit_id]->unit_class==UNIT_CLASS_HUMAN &&
++		firm_res[firmId]->can_build(unitPtr->sprite_recno);
++}
+ #endif
+ 
+ 
+-- 
+2.39.5 (Apple Git-154)
+
