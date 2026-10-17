@@ -1,0 +1,31 @@
+From 23992bb36591bb6239ba1c633eee719d51bee1ee Mon Sep 17 00:00:00 2001
+From: Local Build <local-build@localhost>
+Date: Sat, 17 Oct 2026 20:01:35 +0100
+Subject: [PATCH 8/8] web: use browser-controlled fullscreen for consistent
+ canvas sizing
+
+---
+ src/ConfigAdv.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/ConfigAdv.cpp b/src/ConfigAdv.cpp
+index 80da73c..b76e18b 100644
+--- a/src/ConfigAdv.cpp
++++ b/src/ConfigAdv.cpp
+@@ -268,7 +268,13 @@ void ConfigAdv::reset()
+ 	unit_target_move_range_cycle = 0;
+ 
+ 	vga_allow_highdpi = 0;
++#ifdef __EMSCRIPTEN__
++	// Let the browser shell control fullscreen; native SDL fullscreen changes
++	// the drawing buffer independently of the CSS canvas and misaligns input.
++	vga_full_screen = 0;
++#else
+ 	vga_full_screen = 1;
++#endif
+ 	vga_full_screen_desktop = 1;
+ 	vga_keep_aspect_ratio = 1;
+ 	vga_pause_on_focus_loss = 0;
+-- 
+2.39.5 (Apple Git-154)
+
