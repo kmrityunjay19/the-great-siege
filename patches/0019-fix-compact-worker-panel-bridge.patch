@@ -1,0 +1,60 @@
+From f7658255e3b1f613596065188cfc7401e553ff5c Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sat, 17 Oct 2026 22:34:59 +0100
+Subject: [PATCH 19/19] fix: compact worker panel bridge
+
+---
+ src/OINFO.cpp | 33 ++++++++++++++-------------------
+ 1 file changed, 14 insertions(+), 19 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 6457b5d..d33e815 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -236,29 +236,24 @@ static void publish_selected_object()
+ 		{
+ 			const char* role = unitPtr->spy_recno ? "Spy" :
+ 				unitPtr->skill.skill_id ? unitPtr->skill.skill_des() : "Peasant";
+-			const char* rank = unitPtr->rank_id==RANK_KING ? "King" :
+-				unitPtr->rank_id==RANK_GENERAL ? "General" : "Worker";
+-			const char* status = unitPtr->unit_mode==UNIT_MODE_CONSTRUCT ? "Constructing" :
+-				unitPtr->unit_mode==UNIT_MODE_OVERSEE ? "Overseeing" :
+-				unitPtr->unit_mode==UNIT_MODE_DEFEND_TOWN ? "Defending" :
+-				unitPtr->unit_mode==UNIT_MODE_UNDER_TRAINING ? "Training" : "Ready";
+ 			int isOwn = unitPtr->is_own();
+ 			int isOwnSpy = unitPtr->is_own_spy();
+ 			int spySkill = unitPtr->spy_recno ? spy_array[unitPtr->spy_recno]->spy_skill : 0;
+ 			int spyNotify = unitPtr->spy_recno ? spy_array[unitPtr->spy_recno]->notify_cloaked_nation_flag : 0;
+-			EM_ASM({ if(window.siegeHUD) try { window.siegeHUD.person(
+-				UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),UTF8ToString($3),
+-				$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+-				"unit:"+$21); } catch(error) { console.error("Worker panel error",error); } },
+-				unitPtr->unit_name(),role,rank,status,
+-				(int)unitPtr->hit_points,unitPtr->max_hit_points,unitPtr->loyalty,
+-				unitPtr->skill.combat_level,unitPtr->skill.skill_level,spySkill,isOwn,isOwnSpy,
+-				unitPtr->aggressive_mode,isOwn && unitPtr->skill.skill_id==SKILL_CONSTRUCTION,
+-				unitPtr->mobile_type==UNIT_LAND && unitPtr->rank_id!=RANK_KING,
+-				unitPtr->rank_id==RANK_SOLDIER && unitPtr->skill.skill_id==SKILL_LEADING,
+-				unitPtr->rank_id==RANK_GENERAL,unitPtr->rank_id!=RANK_KING,
+-				unitPtr->home_camp_firm_recno!=0,unitPtr->spy_recno!=0,spyNotify,
+-				unit_array.selected_recno);
++			int flags = isOwn | (isOwnSpy<<1) | (unitPtr->aggressive_mode<<2) |
++				((isOwn && unitPtr->skill.skill_id==SKILL_CONSTRUCTION)<<3) |
++				((unitPtr->mobile_type==UNIT_LAND && unitPtr->rank_id!=RANK_KING)<<4) |
++				((unitPtr->rank_id==RANK_SOLDIER && unitPtr->skill.skill_id==SKILL_LEADING)<<5) |
++				((unitPtr->rank_id==RANK_GENERAL)<<6) | ((unitPtr->rank_id!=RANK_KING)<<7) |
++				((unitPtr->home_camp_firm_recno!=0)<<8) | ((unitPtr->spy_recno!=0)<<9) |
++				(spyNotify<<10);
++			EM_ASM({ if(window.siegeHUD) try { window.siegeHUD.personLite(
++				UTF8ToString($0),UTF8ToString($1),$2,$3,$4,$5,$6,$7,$8,"unit:"+$9);
++				} catch(error) { console.error("Worker panel error",error);
++				window.siegeHUD.notice("Worker panel error: "+error.message); } },
++				unitPtr->unit_name(),role,(int)unitPtr->hit_points,unitPtr->max_hit_points,
++				unitPtr->loyalty,unitPtr->skill.combat_level,unitPtr->skill.skill_level,
++				spySkill,flags,unit_array.selected_recno);
+ 			return;
+ 		}
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
+-- 
+2.39.5 (Apple Git-154)
+
