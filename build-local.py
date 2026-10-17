@@ -26,7 +26,7 @@ for name in ['RESOURCE','IMAGE','SPRITE','SOUND']:args+=['--preload-file',str(ro
 args+=['-o',str(out/'7kaa.html')]
 print('Linking WebAssembly',flush=True);subprocess.run(args,check=True)
 args=[sys.executable,str(em/'tools/file_packager.py'),str(out/'extras.data'),'--preload']
-for name in ['ENCYC','ENCYC2','SCENARIO','SCENARI2','TUTORIAL','MUSIC']:
+for name in ['ENCYC','ENCYC2','SCENARIO','SCENARI2','TUTORIAL']:
  path=root/'upstream/data'/name
  if path.exists():args += [str(path)+'@/data/'+name]
 args += ['--js-output='+str(out/'extras.js')]

@@ -1,0 +1,111 @@
+From 752a5879c6347c7e64b3c3d4ece9011585be4d39 Mon Sep 17 00:00:00 2001
+From: Local Build <local-build@localhost>
+Date: Sat, 17 Oct 2026 20:10:56 +0100
+Subject: [PATCH 9/9] web: expose single-player menu actions for The Great
+ Siege shell
+
+---
+ src/OGAMMAIN.cpp | 54 +++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 53 insertions(+), 1 deletion(-)
+
+diff --git a/src/OGAMMAIN.cpp b/src/OGAMMAIN.cpp
+index f3f19a3..f2ce200 100644
+--- a/src/OGAMMAIN.cpp
++++ b/src/OGAMMAIN.cpp
+@@ -51,6 +51,16 @@
+ #define DISABLE_SINGLE_PLAYER_NEW_GAME
+ #endif
+ 
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++// Browser presentation is separate from the unchanged single-player engine.
++static int siege_pending_action = 0;
++extern "C" EMSCRIPTEN_KEEPALIVE void web_menu_action(int action)
++{
++	if (action >= 1 && action <= 5) siege_pending_action = action;
++}
++#endif
++
+ //----------- Define structure ---------//
+ 
+ struct OptionInfo
+@@ -99,6 +109,10 @@ void Game::main_menu()
+ 
+ 	// skip encyclopedia if not found
+ 	main_option_flag[2] = *sys.dir_encyc ? 1 : 0;
++#ifdef __EMSCRIPTEN__
++	// The accessible browser shell owns this menu; no legacy options beneath it.
++	for (int hidden = 0; hidden < MAIN_OPTION_COUNT; ++hidden) main_option_flag[hidden] = -1;
++#endif
+ 
+ 	//------------- display menu options -------------//
+ 
+@@ -131,7 +145,7 @@ void Game::main_menu()
+ 		// The encyclopedia data arrives in the async extras bundle after boot
+ 		// (web build), so dir_encyc may become valid while we're sitting on the
+ 		// menu. Re-check each loop and re-enable the sword button when it does.
+-		if( main_option_flag[2] != (*sys.dir_encyc ? 1 : 0) )
++		if( main_option_flag[2] >= 0 && main_option_flag[2] != (*sys.dir_encyc ? 1 : 0) )
+ 		{
+ 			main_option_flag[2] = *sys.dir_encyc ? 1 : 0;
+ 			refreshFlag = 1;
+@@ -143,11 +157,17 @@ void Game::main_menu()
+ 		{
+ 			mouse_cursor.set_icon(CURSOR_NORMAL);
+ 
++#ifdef __EMSCRIPTEN__
++			vga_back.bar(0, 0, VGA_WIDTH-1, VGA_HEIGHT-1, V_BLACK);
++#else
+ 			image_interface.put_to_buf( &vga_back, "M_MAIN" );
++#endif
+ 
+ 			vga_util.blt_buf(0,0,VGA_WIDTH-1,VGA_HEIGHT-1);	// blt the main menu screen from the back buffer to the front buffer
+ 
++#ifndef __EMSCRIPTEN__
+ 			disp_version();
++#endif
+ 
+ 			if(!menuBitmap)
+ 			{
+@@ -301,6 +321,38 @@ void Game::main_menu()
+ 			web_open_donate();
+ #endif
+ 
++#ifdef __EMSCRIPTEN__
++		if (siege_pending_action)
++		{
++			const int action = siege_pending_action;
++			siege_pending_action = 0;
++			game_mode = GAME_SINGLE_PLAYER;
++			switch (action)
++			{
++				case 1: single_player_game(0); break;
++				case 2:
++					save_game_array.init("*.SAV");
++					if (save_game_array.load_game() == 1)
++					{
++						sys.set_speed(9, COMMAND_AUTO);
++						battle.run_loaded();
++						deinit();
++					}
++					{
++						const char oldExit = sys.signal_exit_flag;
++						sys.signal_exit_flag = 2;
++						game.deinit();
++						sys.signal_exit_flag = oldExit;
++					}
++					break;
++				case 3: tutor.select_run_tutor(0); break;
++				case 4: select_run_scenario(); break;
++				case 5: game_mode = GAME_ENCYCLOPEDIA; view_encyclopedia(); break;
++			}
++			refreshFlag = 1;
++		}
++#endif
++
+ 		// method to start a game replay at this time
+ 		if( mouse.is_key_event() && mouse.scan_code == 'r')
+ 		{
+-- 
+2.39.5 (Apple Git-154)
+
