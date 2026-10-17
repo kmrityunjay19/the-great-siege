@@ -12,7 +12,7 @@ This is **not a remake.** It's the *real* original C++/SDL2 engine — open-sour
 
 - **Full single-player** — skirmish, the campaign scenarios, tutorial, and the in-game encyclopedia
 - **Saves persist** in the browser (IndexedDB) across reloads
-- Mouse + keyboard, edge-scroll, fullscreen
+- Mouse + keyboard, edge-scroll, and browser fullscreen
 - **Fast load** — the core boots first; optional content (encyclopedia/scenarios/tutorial) streams in the background
 
 Multiplayer (a WebSocket relay, wasm↔wasm) is implemented and verified at the transport layer but **not enabled in the public build** — see [`docs/multiplayer-plan.md`](docs/multiplayer-plan.md).

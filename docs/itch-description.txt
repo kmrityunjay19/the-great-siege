@@ -5,7 +5,7 @@ Build your kingdom, recruit and train units, manage trade and tax, hire independ
 Controls
 - Left-click to select / interact, right-click to move and command
 - Arrow keys or push the cursor to a screen edge to scroll the map
-- The fullscreen button (top-right) or your browser's fullscreen for big-screen play; Esc exits fullscreen
+- Your browser's fullscreen command for big-screen play; Esc exits fullscreen
 
 Tips
 - Loads in two parts — you can start playing while the encyclopedia, scenarios, and tutorial finish downloading in the background.

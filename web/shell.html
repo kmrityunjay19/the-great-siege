@@ -23,21 +23,13 @@
       height: 100vh !important;
       transform: translate(-50%, -50%);
       object-fit: fill; background: #000;
-      image-rendering: pixelated; outline: none; display: block; }
+      image-rendering: auto; outline: none; display: block; }
     #status { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center;
       font-size: 13px; min-height: 1.2em; z-index: 2; pointer-events: none; }
     #bar { position: absolute; left: 50%; transform: translateX(-50%); bottom: 32px;
       width: 320px; height: 6px; background: #222; border: 1px solid #444;
       display: none; z-index: 2; }
     #bar > div { height: 100%; width: 0; background: #cbb88a; }
-    /* In-game fullscreen toggle. Lives OUTSIDE #wrap so the browser hides it
-       automatically while #wrap is fullscreen (Esc exits fullscreen). */
-    #fsbtn { position: fixed; top: 10px; right: 12px; z-index: 10;
-      width: 34px; height: 34px; padding: 0; font-size: 17px; line-height: 32px;
-      text-align: center; color: #d8c79a; background: rgba(28,24,16,0.78);
-      border: 1px solid #7a6b4d; border-radius: 5px; cursor: pointer;
-      opacity: 0.7; transition: opacity .15s; }
-    #fsbtn:hover { opacity: 1; }
     /* Loading-screen credit line — shown over the (black) canvas while the core
        data downloads, hidden once the engine boots (onRuntimeInitialized). */
     #credits { position: absolute; left: 0; right: 0; bottom: 56px; text-align: center;
@@ -45,8 +37,7 @@
       padding: 0 16px; color: #cbb88a; }
     #credits a { color: #d8c79a; text-decoration: none; border-bottom: 1px dotted #7a6b4d; }
     #credits a:hover { color: #f0e3b8; }
-    /* Discreet "About & Support" footer link + its panel. Like #fsbtn it lives
-       OUTSIDE #wrap so the browser auto-hides it while #wrap is fullscreen. */
+    /* Discreet "About & Support" footer link and its panel. */
     #aboutbtn { position: fixed; left: 12px; bottom: 12px; z-index: 10; display: none;
       height: 28px; padding: 0 12px; font: inherit; font-size: 12px; line-height: 26px;
       color: #d8c79a; background: rgba(28,24,16,0.78); border: 1px solid #7a6b4d;
@@ -81,8 +72,7 @@
     body.rot90 #canvas { width: 100vh !important; height: 100vw !important;
       top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(90deg);
       transform-origin: center center; }
-    /* Rotate-override + on-screen menu/back buttons. Like #fsbtn they live OUTSIDE
-       #wrap so they stay upright in the corners and auto-hide in fullscreen. */
+    /* Rotate-override + on-screen menu/back buttons remain upright in the corners. */
     #rotbtn, #menubtn { position: fixed; z-index: 10; display: none;
       width: 34px; height: 34px; padding: 0; font-size: 16px; line-height: 32px;
       text-align: center; color: #d8c79a; background: rgba(28,24,16,0.78);
@@ -116,7 +106,7 @@
     .siege-action small{font:11px ui-monospace,monospace;color:inherit;opacity:.55}
     .siege-action:disabled{opacity:.4;cursor:wait;transform:none}
     #siege-ready{min-height:20px;font:11px/1.6 ui-monospace,monospace;color:#9b9e95;margin-top:22px}
-    #aboutbtn{z-index:12} #fsbtn{z-index:12} #status,#bar{z-index:12}
+    #aboutbtn{z-index:12} #status,#bar{z-index:12}
     @media(max-width:800px){#siege-menu{grid-template-columns:1fr;align-content:center;padding:28px 0}.siege-brand{margin:20px 8vw 12px}.siege-brand h1{font-size:54px;margin:16px 0}.siege-tagline,.siege-rule{display:none}.siege-actions{padding:20px 8vw 50px}.siege-actions h2{margin-bottom:14px}.siege-action{padding:14px 18px;font-size:17px}.siege-art:after{background:#0c1115aa}}
   </style>
   <section id="siege-menu" aria-label="The Great Siege main menu">
@@ -139,7 +129,6 @@
     <div id="bar"><div id="barfill"></div></div>
     <div id="credits">The Great Siege · Loading game files</div>
   </div>
-  <button id="fsbtn" type="button" title="Fullscreen (Esc to exit)" aria-label="Toggle fullscreen">⛶</button>
   <button id="rotbtn" type="button" title="Screen rotation: auto" aria-label="Rotate screen 90 degrees">⟳</button>
   <button id="menubtn" type="button" title="Menu / Back (Esc)" aria-label="Menu / Back">☰</button>
   <button id="aboutbtn" type="button" title="About and licenses">About &amp; Licenses</button>
@@ -300,25 +289,6 @@
     }, 250);
     Module.setStatus('Downloading…');
     window.onerror = function () { Module.setStatus('Exception — see console.'); };
-    // Fullscreen toggle. Fullscreen the #wrap container so the canvas's
-    // object-fit:contain preserves the 4:3 aspect (no stretch). Esc exits.
-    (function () {
-      var btn = document.getElementById('fsbtn');
-      var wrap = document.getElementById('wrap');
-      if (!btn || !wrap) return;
-      // iPhone Safari has no element fullscreen — hide the button there so it isn't dead.
-      if (!(wrap.requestFullscreen || wrap.webkitRequestFullscreen)) { btn.style.display = 'none'; return; }
-      btn.addEventListener('click', function () {
-        try {
-          if (document.fullscreenElement || document.webkitFullscreenElement) {
-            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-          } else {
-            (wrap.requestFullscreen || wrap.webkitRequestFullscreen).call(wrap);
-          }
-        } catch (e) {}
-        try { Module.canvas && Module.canvas.focus(); } catch (e) {}  // keep key events going to the game
-      });
-    })();
     // "About & Support" — a discreet footer link that opens a dismissible panel
     // (credit to the 7kfans devs + a tip jar for the web port). Opt-in, so it never
     // intrudes on the menu or gameplay; auto-hidden by the browser while fullscreen.
