@@ -1,0 +1,60 @@
+From 3e21a83d59e0dd1117c9d0a6f40ea75ea6701bd6 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sat, 17 Oct 2026 23:15:38 +0100
+Subject: [PATCH 21/21] ui: add direct inn candidate actions
+
+---
+ src/OINFO.cpp | 23 +++++++++++++++++++++--
+ 1 file changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 951560f..fe50e09 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -161,8 +161,8 @@ static void publish_selected_object()
+ 					const char* candidateSkill=candidatePtr->skill.skill_id ?
+ 						candidatePtr->skill.skill_des() : "Untrained";
+ 					EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingFeatureRow(
+-						"Candidate",UTF8ToString($0),UTF8ToString($1),$2,"Hire cost"); },
+-						unit_res[candidatePtr->unit_id]->name,candidateSkill,candidatePtr->hire_cost);
++						"Candidate",UTF8ToString($0),UTF8ToString($1),$2,"Hire cost","inn-hire",$3); },
++						unit_res[candidatePtr->unit_id]->name,candidateSkill,candidatePtr->hire_cost,i+1);
+ 				}
+ 			}
+ 			else if( firmPtr->firm_id==FIRM_HARBOR )
+@@ -271,6 +271,7 @@ static void publish_selected_object()
+ 			kind, firmPtr->firm_name(), (int)firmPtr->hit_points, (int)firmPtr->max_hit_points,
+ 			label1, value1, label2, value2, label3, value3, actionCode,
+ 			firmPtr->own_firm(), firmPtr->under_construction, firmPtr->firm_recno);
++		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterMode(UTF8ToString($0)); }, actionCode);
+ 		return;
+ 	}
+ 	EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterShow(false); });
+@@ -437,6 +438,24 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_unit_command(int action, int value)
+ 	info.disp();
+ }
+ 
++extern "C" EMSCRIPTEN_KEEPALIVE void web_building_item_action(int action, int value)
++{
++	if( !firm_array.selected_recno )
++		return;
++	Firm* firmPtr=firm_array[firm_array.selected_recno];
++	if( !firmPtr->own_firm() )
++		return;
++
++	if( action==1 && firmPtr->firm_id==FIRM_INN )
++	{
++		FirmInn* innPtr=(FirmInn*)firmPtr;
++		if( value>=1 && value<=innPtr->inn_unit_count )
++			innPtr->hire(value);
++	}
++
++	info.disp();
++}
++
+ extern "C" EMSCRIPTEN_KEEPALIVE int web_unit_can_build(int firmId)
+ {
+ 	if( !unit_array.selected_recno || firmId<1 || firmId>MAX_FIRM_TYPE )
+-- 
+2.39.5 (Apple Git-154)
+

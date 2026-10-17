@@ -1,7 +1,7 @@
 From 93ea5733f84af3780deaefe5b6f78aa4bd3e5a78 Mon Sep 17 00:00:00 2001
 From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
 Date: Tue, 9 Jun 2026 16:06:17 +0100
-Subject: [PATCH 07/20] input: touch pointer-injection shims for web
+Subject: [PATCH 07/21] input: touch pointer-injection shims for web
  mobile/tablet mode
 
 Add web_pointer_move / web_pointer_button / web_scroll_gesture / web_scroll_end /
