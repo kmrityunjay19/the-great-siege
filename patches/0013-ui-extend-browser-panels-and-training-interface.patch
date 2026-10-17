@@ -1,0 +1,267 @@
+From 189ab9f9667cd7ac15c739d170f3bf8745c81312 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sat, 17 Oct 2026 21:48:41 +0100
+Subject: [PATCH 13/13] ui: extend browser panels and training interface
+
+---
+ src/OINFO.cpp    | 114 ++++++++++++++++++++++++++++++++---------------
+ src/OINGMENU.cpp |   3 +-
+ src/OTUTOR.cpp   |  40 +++++++++++++++++
+ src/OTUTOR2.cpp  |   2 +-
+ 4 files changed, 121 insertions(+), 38 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index b08e533..84d07b7 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -29,6 +29,7 @@
+ #include <OBUTTON.h>
+ #include <OMOUSE.h>
+ #include <OFIRM.h>
++#include <OFIRMID.h>
+ #include <OSTR.h>
+ #include <ONEWS.h>
+ #include <ONATION.h>
+@@ -39,6 +40,7 @@
+ #include <OGAME.h>
+ #include <OPOWER.h>
+ #include <OSITE.h>
++#include <ORAWRES.h>
+ #include <OWALLRES.h>
+ #include <OSYS.h>
+ #include <OUNIT.h>
+@@ -68,46 +70,86 @@ static	char *save_buf_3 = NULL;
+ static	char *save_buf_4 = NULL;
+ 
+ #ifdef __EMSCRIPTEN__
+-// Keep the browser-side town panel synchronized without changing saved games.
+-static void publish_selected_town()
++// Keep the browser-side selection panel synchronized without changing saved games.
++static void publish_selected_object()
+ {
+-	static int last_town_recno = -1;
+-	static int last_population = -1;
+-	static int last_peasants = -1;
+-	static int last_loyalty = -1;
+-	static int last_has_camp = -1;
+-
+-	int townRecno = (!firm_array.selected_recno && town_array.selected_recno)
+-		? town_array.selected_recno : 0;
+-	Town* townPtr = townRecno ? town_array[townRecno] : NULL;
+-	if( townPtr && townPtr->nation_recno != nation_array.player_recno )
+-		townPtr = NULL;
+-
+-	if( !townPtr )
+-	{
+-		if( last_town_recno != 0 )
+-			EM_ASM({ if(window.siegeHUD) window.siegeHUD.selection(""); });
+-		last_town_recno = 0;
++	if( firm_array.selected_recno )
++	{
++		Firm* firmPtr = firm_array[firm_array.selected_recno];
++		const char* kind = "Structure";
++		switch( firmPtr->firm_id )
++		{
++			case FIRM_BASE: kind="Seat of Power"; break;
++			case FIRM_FACTORY: kind="Workshop"; break;
++			case FIRM_INN: kind="Inn"; break;
++			case FIRM_MARKET: kind="Market"; break;
++			case FIRM_CAMP: kind="Fort"; break;
++			case FIRM_MINE: kind="Mine"; break;
++			case FIRM_RESEARCH: kind="Science Tower"; break;
++			case FIRM_WAR_FACTORY: kind="War Factory"; break;
++			case FIRM_HARBOR: kind="Harbor"; break;
++			case FIRM_MONSTER: kind="Lair"; break;
++		}
++		EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
++			UTF8ToString($0),UTF8ToString($1),"Health",$2+" / "+$3,
++			"Efficiency",$4+"%","Staff",$5,$6,"firm:"+$7); },
++			kind, firmPtr->firm_name(), (int)firmPtr->hit_points,
++			(int)firmPtr->max_hit_points, (int)firmPtr->productivity,
++			(int)firmPtr->worker_count, firmPtr->own_firm(), firmPtr->firm_recno);
++		return;
++	}
++
++	if( town_array.selected_recno )
++	{
++		Town* townPtr = town_array[town_array.selected_recno];
++		if( townPtr->nation_recno == nation_array.player_recno )
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.selection(
++				"town",UTF8ToString($0),$1,$2,$3,$4,true,"town:"+$5); },
++				townPtr->town_name(), townPtr->population, townPtr->jobless_population,
++				townPtr->average_loyalty(), townPtr->has_linked_own_camp,
++				townPtr->town_recno);
++		else
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
++				"Settlement",UTF8ToString($0),"Population",$1,"Resistance",$2,
++				"Peasants",$3,false,"town:"+$4); }, townPtr->town_name(),
++				townPtr->population, townPtr->average_resistance(nation_array.player_recno),
++				townPtr->jobless_population, townPtr->town_recno);
++		return;
++	}
++
++	if( site_array.selected_recno )
++	{
++		Site* sitePtr=site_array[site_array.selected_recno];
++		if( sitePtr->site_type == SITE_RAW )
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
++				"Mineral Deposit",UTF8ToString($0),"Reserve",$1,"Status",$2?"Claimed":"Available",
++				"Map site","Natural resource",false,"site:"+$3); },
++				raw_res[sitePtr->object_id]->name, sitePtr->reserve_qty,
++				sitePtr->has_mine, sitePtr->site_recno);
++		else if( sitePtr->site_type == SITE_SCROLL )
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
++				"Ancient Knowledge","Scroll of Power","Status","Unclaimed",
++				"Discovery","Rare","Map site","Exploration",false,"site:"+$0); },sitePtr->site_recno);
++		else
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
++				"Treasure","Gold Cache","Worth",$0,"Status","Unclaimed",
++				"Map site","Treasure",false,"site:"+$1); },sitePtr->object_id,sitePtr->site_recno);
+ 		return;
+ 	}
+ 
+-	int loyalty = townPtr->average_loyalty();
+-	if( townRecno == last_town_recno && townPtr->population == last_population &&
+-		townPtr->jobless_population == last_peasants && loyalty == last_loyalty &&
+-		townPtr->has_linked_own_camp == last_has_camp )
++	if( unit_array.selected_recno )
++	{
++		Unit* unitPtr=unit_array[unit_array.selected_recno];
++		EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
++			"Unit",UTF8ToString($0),"Health",$1+" / "+$2,"Loyalty",$3,
++			"Skill",$4,$5,"unit:"+$6); }, unitPtr->unit_name(),
++			(int)unitPtr->hit_points, unitPtr->max_hit_points, unitPtr->loyalty,
++			unitPtr->skill.skill_level, unitPtr->nation_recno==nation_array.player_recno,
++			unit_array.selected_recno);
+ 		return;
++	}
+ 
+-	EM_ASM({
+-		if(window.siegeHUD) window.siegeHUD.selection(
+-			"town", UTF8ToString($0), $1, $2, $3, $4, true);
+-	}, townPtr->town_name(), townPtr->population, townPtr->jobless_population,
+-		loyalty, townPtr->has_linked_own_camp);
+-
+-	last_town_recno = townRecno;
+-	last_population = townPtr->population;
+-	last_peasants = townPtr->jobless_population;
+-	last_loyalty = loyalty;
+-	last_has_camp = townPtr->has_linked_own_camp;
++	EM_ASM({ if(window.siegeHUD) window.siegeHUD.selection(""); });
+ }
+ #endif
+ 
+@@ -348,7 +390,7 @@ void Info::disp()
+ 		return;
+ 
+ #ifdef __EMSCRIPTEN__
+-	publish_selected_town();
++	publish_selected_object();
+ #endif
+ 
+ 	vga_back.put_bitmap( INFO_X1, INFO_Y1, info_background_bitmap );
+@@ -402,7 +444,7 @@ void Info::update()
+ 		return;
+ 
+ #ifdef __EMSCRIPTEN__
+-	publish_selected_town();
++	publish_selected_object();
+ #endif
+ 
+ 	//-------------------------------------------//
+diff --git a/src/OINGMENU.cpp b/src/OINGMENU.cpp
+index 8c499bc..7b5bb28 100644
+--- a/src/OINGMENU.cpp
++++ b/src/OINGMENU.cpp
+@@ -101,8 +101,9 @@ void InGameMenu::enter(char untilExitFlag)
+ 
+    power.win_opened = 1;
+ #ifdef __EMSCRIPTEN__
++   game_menu_option_flag[6] = 0;    // browser fullscreen is controlled by the browser
+    siege_ui_begin("pause","Your kingdom awaits");
+-   const char* labels[]={"Settings","Save game","Load game","Training","Retire","Main menu","Exit fullscreen","Continue playing"};
++   const char* labels[]={"Settings","Save game","Load game","Training","Retire","Main menu","","Continue playing"};
+    for(int i=0;i<GAME_OPTION_COUNT;i++)if(game_menu_option_flag[i])siege_ui_item(i+1,labels[i],i==7?"Return to your kingdom.":"Choose this action, then press Confirm.");
+    siege_pause_action=siege_ui_wait();
+    if(!siege_pause_action)siege_pause_action=8;
+diff --git a/src/OTUTOR.cpp b/src/OTUTOR.cpp
+index 979065e..ebea659 100644
+--- a/src/OTUTOR.cpp
++++ b/src/OTUTOR.cpp
+@@ -44,6 +44,15 @@
+ #include <OMOUSE.h>
+ #include <dbglog.h>
+ #include <ConfigAdv.h>
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++static int siege_tutorial_action = 0;
++extern "C" EMSCRIPTEN_KEEPALIVE void web_tutorial_action(int action)
++{
++	if( action >= 1 && action <= 5 )
++		siege_tutorial_action = action;
++}
++#endif
+ 
+ #include <posix_string_compat.h>
+ 
+@@ -471,6 +480,15 @@ void Tutor::run(int tutorId, int inGameCall)
+ 
+ void Tutor::disp()
+ {
++#ifdef __EMSCRIPTEN__
++	if( cur_text_block_id >= 1 && cur_text_block_id <= text_block_count )
++	{
++		TutorTextBlock* webTextBlock = text_block_array+cur_text_block_id-1;
++		EM_ASM({ if(window.siegeTraining) window.siegeTraining.show(
++			UTF8ToString($0),$1,$2); }, webTextBlock->text_ptr,
++			cur_text_block_id, text_block_count);
++	}
++#endif
+ 	vga.use_back();
+ 
+ 	Vga::opaque_flag = config.opaque_report;
+@@ -600,6 +618,28 @@ void Tutor::stop_speech()
+ 
+ int Tutor::detect()
+ {
++#ifdef __EMSCRIPTEN__
++	if( siege_tutorial_action )
++	{
++		int action=siege_tutorial_action;
++		siege_tutorial_action=0;
++		if( action==1 ) prev_text_block();
++		else if( action==2 ) next_text_block();
++		else if( action==3 ) { cur_text_block_id=1; text_max_lines=0; }
++		else if( action==4 )
++		{
++			stop_speech(); game.game_mode=GAME_SINGLE_PLAYER;
++			EM_ASM({ if(window.siegeTraining) window.siegeTraining.hide(); });
++		}
++		else if( action==5 )
++		{
++			stop_speech();
++			EM_ASM({ if(window.siegeTraining) window.siegeTraining.hide(); });
++			select_run_tutor(1);
++		}
++		return 1;
++	}
++#endif
+ 	if( button_new_tutor.detect() )
+ 	{
+    	stop_speech();
+diff --git a/src/OTUTOR2.cpp b/src/OTUTOR2.cpp
+index 4eb6c30..c22168e 100644
+--- a/src/OTUTOR2.cpp
++++ b/src/OTUTOR2.cpp
+@@ -138,7 +138,7 @@ int Tutor::select_tutor(int actionMode)
+ 	//-------------------------------------//
+ 
+ #ifdef __EMSCRIPTEN__
+-	siege_ui_begin("training","Training");
++	siege_ui_begin("training","Training Grounds");
+ 	for(int i=1;i<=tutor_count;++i) siege_ui_item(i,(*this)[i]->des,get_intro(i),(*this)[i]->code);
+ 	const int selected=siege_ui_wait();
+ 	return selected>=1 && selected<=tutor_count ? selected : 0;
+-- 
+2.39.5 (Apple Git-154)
+

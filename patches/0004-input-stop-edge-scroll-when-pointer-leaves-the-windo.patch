@@ -1,7 +1,7 @@
 From 90574f8d458ab8a044707206a40e71b1c05cb724 Mon Sep 17 00:00:00 2001
 From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
 Date: Tue, 9 Jun 2026 10:32:06 +0100
-Subject: [PATCH 04/12] input: stop edge-scroll when pointer leaves the window;
+Subject: [PATCH 04/13] input: stop edge-scroll when pointer leaves the window;
  wheel-scroll menu lists
 
 Add Mouse::in_window (set/cleared on SDL_WINDOWEVENT_ENTER/LEAVE); World::detect_scroll skips edge-scroll when the cursor is outside (fixes runaway scroll across monitors). VBrowse::detect now consumes the mouse wheel to scroll lists. Not web-specific.
