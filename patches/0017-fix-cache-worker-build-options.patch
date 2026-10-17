@@ -1,0 +1,63 @@
+From a06ff99cb44b20b44a6576cf2d9fc96ddabe7a0d Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sat, 17 Oct 2026 22:27:00 +0100
+Subject: [PATCH 17/17] fix: cache worker build options
+
+---
+ src/OINFO.cpp | 24 +++++++++++++-----------
+ 1 file changed, 13 insertions(+), 11 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 0240795..786232d 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -83,6 +83,8 @@ static	char *save_buf_4 = NULL;
+ 
+ #ifdef __EMSCRIPTEN__
+ // Keep the browser-side selection panel synchronized without changing saved games.
++static int last_web_person_build_recno = 0;
++static int last_web_person_can_build = 0;
+ static void publish_selected_object()
+ {
+ 	if( firm_array.selected_recno )
+@@ -244,18 +246,18 @@ static void publish_selected_object()
+ 				unitPtr->unit_mode==UNIT_MODE_UNDER_TRAINING ? "Training" : "Ready";
+ 			int isOwn = unitPtr->is_own();
+ 			int isOwnSpy = unitPtr->is_own_spy();
+-			int canBuild = 0;
+-			EM_ASM({ if(window.siegeHUD) window.siegeHUD.personBuildReset(); });
+-			if( isOwn )
++			if( last_web_person_build_recno != unit_array.selected_recno )
+ 			{
++				EM_ASM({ if(window.siegeHUD) window.siegeHUD.personBuildReset(); });
++				last_web_person_build_recno = unit_array.selected_recno;
++				last_web_person_can_build = 0;
+ 				for( int firmId=1; firmId<=MAX_FIRM_TYPE; ++firmId )
+-				{
+-					if( !firm_res[firmId]->can_build(unitPtr->sprite_recno) )
+-						continue;
+-					canBuild = 1;
+-					EM_ASM({ if(window.siegeHUD) window.siegeHUD.personBuild(
+-						$0,UTF8ToString($1)); },firmId,firm_res[firmId]->name);
+-				}
++					if( isOwn && firm_res[firmId]->can_build(unitPtr->sprite_recno) )
++					{
++						last_web_person_can_build = 1;
++						EM_ASM({ if(window.siegeHUD) window.siegeHUD.personBuild(
++							$0,UTF8ToString($1)); },firmId,firm_res[firmId]->name);
++					}
+ 			}
+ 			int spySkill = unitPtr->spy_recno ? spy_array[unitPtr->spy_recno]->spy_skill : 0;
+ 			int spyNotify = unitPtr->spy_recno ? spy_array[unitPtr->spy_recno]->notify_cloaked_nation_flag : 0;
+@@ -265,7 +267,7 @@ static void publish_selected_object()
+ 				"unit:"+$21); },unitPtr->unit_name(),role,rank,status,
+ 				(int)unitPtr->hit_points,unitPtr->max_hit_points,unitPtr->loyalty,
+ 				unitPtr->skill.combat_level,unitPtr->skill.skill_level,spySkill,isOwn,isOwnSpy,
+-				unitPtr->aggressive_mode,canBuild,
++				unitPtr->aggressive_mode,last_web_person_can_build,
+ 				unitPtr->mobile_type==UNIT_LAND && unitPtr->rank_id!=RANK_KING,
+ 				unitPtr->rank_id==RANK_SOLDIER && unitPtr->skill.skill_id==SKILL_LEADING,
+ 				unitPtr->rank_id==RANK_GENERAL,unitPtr->rank_id!=RANK_KING,
+-- 
+2.39.5 (Apple Git-154)
+
