@@ -1,7 +1,7 @@
 From 189ab9f9667cd7ac15c739d170f3bf8745c81312 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sat, 17 Oct 2026 21:48:41 +0100
-Subject: [PATCH 13/13] ui: extend browser panels and training interface
+Subject: [PATCH 13/14] ui: extend browser panels and training interface
 
 ---
  src/OINFO.cpp    | 114 ++++++++++++++++++++++++++++++++---------------

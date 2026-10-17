@@ -1,0 +1,132 @@
+From dcd033279b7d094ba5c55c9611102e60fd605bd0 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sat, 17 Oct 2026 21:55:47 +0100
+Subject: [PATCH 14/14] ui: add structure-specific browser details
+
+---
+ src/OINFO.cpp | 99 ++++++++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 83 insertions(+), 16 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 84d07b7..c503626 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -30,6 +30,16 @@
+ #include <OMOUSE.h>
+ #include <OFIRM.h>
+ #include <OFIRMID.h>
++#include <OF_BASE.h>
++#include <OF_CAMP.h>
++#include <OF_FACT.h>
++#include <OF_HARB.h>
++#include <OF_INN.h>
++#include <OF_MARK.h>
++#include <OF_MINE.h>
++#include <OF_MONS.h>
++#include <OF_RESE.h>
++#include <OF_WAR.h>
+ #include <OSTR.h>
+ #include <ONEWS.h>
+ #include <ONATION.h>
+@@ -77,25 +87,82 @@ static void publish_selected_object()
+ 	{
+ 		Firm* firmPtr = firm_array[firm_array.selected_recno];
+ 		const char* kind = "Structure";
++		const char* label1 = "Efficiency";
++		const char* label2 = "Staff";
++		const char* label3 = "Status";
++		int value1 = (int) firmPtr->productivity;
++		int value2 = firmPtr->worker_count;
++		int value3 = firmPtr->under_construction ? 0 : 1;
++		const char* actionCode = "structure";
+ 		switch( firmPtr->firm_id )
+ 		{
+-			case FIRM_BASE: kind="Seat of Power"; break;
+-			case FIRM_FACTORY: kind="Workshop"; break;
+-			case FIRM_INN: kind="Inn"; break;
+-			case FIRM_MARKET: kind="Market"; break;
+-			case FIRM_CAMP: kind="Fort"; break;
+-			case FIRM_MINE: kind="Mine"; break;
+-			case FIRM_RESEARCH: kind="Science Tower"; break;
+-			case FIRM_WAR_FACTORY: kind="War Factory"; break;
+-			case FIRM_HARBOR: kind="Harbor"; break;
+-			case FIRM_MONSTER: kind="Lair"; break;
++			case FIRM_BASE:
++			{
++				FirmBase* p=(FirmBase*)firmPtr; kind="Seat of Power"; actionCode="base";
++				label1="Prayer"; value1=(int)p->pray_points; label2="Attendants"; value2=p->worker_count;
++				label3="Deity active"; value3=p->god_unit_recno!=0; break;
++			}
++			case FIRM_FACTORY:
++			{
++				FirmFactory* p=(FirmFactory*)firmPtr; kind="Workshop"; actionCode="factory";
++				label1="Raw stock"; value1=(int)p->raw_stock_qty; label2="Goods"; value2=(int)p->stock_qty;
++				label3="Efficiency"; value3=(int)p->productivity; break;
++			}
++			case FIRM_INN:
++			{
++				FirmInn* p=(FirmInn*)firmPtr; kind="Inn"; actionCode="inn";
++				label1="Candidates"; value1=p->inn_unit_count; label2="Rooms available"; value2=MAX_INN_UNIT-p->inn_unit_count;
++				label3="Staff"; value3=p->worker_count; break;
++			}
++			case FIRM_MARKET:
++			{
++				FirmMarket* p=(FirmMarket*)firmPtr; kind="Market"; actionCode="market";
++				label1="Stock value"; value1=p->stock_value_index(); label2="Free stalls"; value2=p->free_slot_count();
++				label3="Year income"; value3=(int)p->income_365days(); break;
++			}
++			case FIRM_CAMP:
++			{
++				FirmCamp* p=(FirmCamp*)firmPtr; kind="Fort"; actionCode="camp";
++				label1="Soldiers"; value1=p->worker_count; label2="Combat strength"; value2=p->total_combat_level();
++				label3="Defense mode"; value3=p->defense_flag; break;
++			}
++			case FIRM_MINE:
++			{
++				FirmMine* p=(FirmMine*)firmPtr; kind="Mine"; actionCode="mine";
++				label1="Reserve"; value1=(int)p->reserve_qty; label2="Stock"; value2=(int)p->stock_qty;
++				label3="Miners"; value3=p->worker_count; break;
++			}
++			case FIRM_RESEARCH:
++			{
++				FirmResearch* p=(FirmResearch*)firmPtr; kind="Science Tower"; actionCode="research";
++				label1="Progress"; value1=(int)p->complete_percent; label2="Researchers"; value2=p->worker_count;
++				label3="Project selected"; value3=p->tech_id!=0; break;
++			}
++			case FIRM_WAR_FACTORY:
++			{
++				FirmWar* p=(FirmWar*)firmPtr; kind="War Factory"; actionCode="war";
++				label1="Build progress"; value1=(int)p->build_progress_days; label2="Queue"; value2=p->build_queue_count;
++				label3="Workers"; value3=p->worker_count; break;
++			}
++			case FIRM_HARBOR:
++			{
++				FirmHarbor* p=(FirmHarbor*)firmPtr; kind="Harbor"; actionCode="harbor";
++				label1="Ships docked"; value1=p->ship_count; label2="Build queue"; value2=p->build_queue_count;
++				label3="Workers"; value3=p->worker_count; break;
++			}
++			case FIRM_MONSTER:
++			{
++				FirmMonster* p=(FirmMonster*)firmPtr; kind="Lair"; actionCode="lair";
++				label1="Generals"; value1=p->monster_general_count; label2="Defenders"; value2=p->total_defender();
++				label3="Aggression"; value3=p->monster_aggressiveness; break;
++			}
+ 		}
+-		EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
+-			UTF8ToString($0),UTF8ToString($1),"Health",$2+" / "+$3,
+-			"Efficiency",$4+"%","Staff",$5,$6,"firm:"+$7); },
+-			kind, firmPtr->firm_name(), (int)firmPtr->hit_points,
+-			(int)firmPtr->max_hit_points, (int)firmPtr->productivity,
+-			(int)firmPtr->worker_count, firmPtr->own_firm(), firmPtr->firm_recno);
++		EM_ASM({ if(window.siegeHUD) window.siegeHUD.structure(
++			UTF8ToString($0),UTF8ToString($1),$2,$3,UTF8ToString($4),$5,
++			UTF8ToString($6),$7,UTF8ToString($8),$9,UTF8ToString($10),$11,$12,"firm:"+$13); },
++			kind, firmPtr->firm_name(), (int)firmPtr->hit_points, (int)firmPtr->max_hit_points,
++			label1, value1, label2, value2, label3, value3, actionCode,
++			firmPtr->own_firm(), firmPtr->under_construction, firmPtr->firm_recno);
+ 		return;
+ 	}
+ 
+-- 
+2.39.5 (Apple Git-154)
+
