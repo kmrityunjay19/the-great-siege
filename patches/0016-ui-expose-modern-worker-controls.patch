@@ -1,0 +1,106 @@
+From c4ee211845fa861f901b3bcaca0978bf9cf341a0 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sat, 17 Oct 2026 22:23:11 +0100
+Subject: [PATCH 16/16] ui: expose modern worker controls
+
+---
+ src/OINFO.cpp | 76 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 76 insertions(+)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index afe57df..0240795 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -232,6 +232,47 @@ static void publish_selected_object()
+ 	if( unit_array.selected_recno )
+ 	{
+ 		Unit* unitPtr=unit_array[unit_array.selected_recno];
++		if( unitPtr->race_id && unit_res[unitPtr->unit_id]->unit_class == UNIT_CLASS_HUMAN )
++		{
++			const char* role = unitPtr->spy_recno ? "Spy" :
++				unitPtr->skill.skill_id ? unitPtr->skill.skill_des() : "Peasant";
++			const char* rank = unitPtr->rank_id==RANK_KING ? "King" :
++				unitPtr->rank_id==RANK_GENERAL ? "General" : "Worker";
++			const char* status = unitPtr->unit_mode==UNIT_MODE_CONSTRUCT ? "Constructing" :
++				unitPtr->unit_mode==UNIT_MODE_OVERSEE ? "Overseeing" :
++				unitPtr->unit_mode==UNIT_MODE_DEFEND_TOWN ? "Defending" :
++				unitPtr->unit_mode==UNIT_MODE_UNDER_TRAINING ? "Training" : "Ready";
++			int isOwn = unitPtr->is_own();
++			int isOwnSpy = unitPtr->is_own_spy();
++			int canBuild = 0;
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.personBuildReset(); });
++			if( isOwn )
++			{
++				for( int firmId=1; firmId<=MAX_FIRM_TYPE; ++firmId )
++				{
++					if( !firm_res[firmId]->can_build(unitPtr->sprite_recno) )
++						continue;
++					canBuild = 1;
++					EM_ASM({ if(window.siegeHUD) window.siegeHUD.personBuild(
++						$0,UTF8ToString($1)); },firmId,firm_res[firmId]->name);
++				}
++			}
++			int spySkill = unitPtr->spy_recno ? spy_array[unitPtr->spy_recno]->spy_skill : 0;
++			int spyNotify = unitPtr->spy_recno ? spy_array[unitPtr->spy_recno]->notify_cloaked_nation_flag : 0;
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.person(
++				UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),UTF8ToString($3),
++				$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
++				"unit:"+$21); },unitPtr->unit_name(),role,rank,status,
++				(int)unitPtr->hit_points,unitPtr->max_hit_points,unitPtr->loyalty,
++				unitPtr->skill.combat_level,unitPtr->skill.skill_level,spySkill,isOwn,isOwnSpy,
++				unitPtr->aggressive_mode,canBuild,
++				unitPtr->mobile_type==UNIT_LAND && unitPtr->rank_id!=RANK_KING,
++				unitPtr->rank_id==RANK_SOLDIER && unitPtr->skill.skill_id==SKILL_LEADING,
++				unitPtr->rank_id==RANK_GENERAL,unitPtr->rank_id!=RANK_KING,
++				unitPtr->home_camp_firm_recno!=0,unitPtr->spy_recno!=0,spyNotify,
++				unit_array.selected_recno);
++			return;
++		}
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
+ 			"Unit",UTF8ToString($0),"Health",$1+" / "+$2,"Loyalty",$3,
+ 			"Skill",$4,$5,"unit:"+$6); }, unitPtr->unit_name(),
+@@ -270,6 +311,41 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_town_command(int action, int value, int
+ 
+ 	info.disp();
+ }
++
++extern "C" EMSCRIPTEN_KEEPALIVE void web_unit_command(int action, int value)
++{
++	if( !unit_array.selected_recno )
++		return;
++	Unit* unitPtr=unit_array[unit_array.selected_recno];
++	if( !unitPtr->is_own() || !unitPtr->race_id ||
++		 unit_res[unitPtr->unit_id]->unit_class != UNIT_CLASS_HUMAN )
++		return;
++
++	if( action==1 )
++		unitPtr->aggressive_mode = !unitPtr->aggressive_mode;
++	else if( action==2 && value>=1 && value<=MAX_FIRM_TYPE &&
++		 firm_res[value]->can_build(unitPtr->sprite_recno) )
++		power.issue_command(COMMAND_BUILD_FIRM,unitPtr->sprite_recno,value);
++	else if( action==3 && unitPtr->mobile_type==UNIT_LAND && unitPtr->rank_id!=RANK_KING )
++		power.issue_command(COMMAND_SETTLE,unitPtr->sprite_recno);
++	else if( action==4 && unitPtr->rank_id==RANK_SOLDIER && unitPtr->skill.skill_id==SKILL_LEADING )
++		unitPtr->set_rank(RANK_GENERAL);
++	else if( action==5 && unitPtr->rank_id==RANK_GENERAL )
++		unitPtr->set_rank(RANK_SOLDIER);
++	else if( action==6 && unitPtr->rank_id!=RANK_KING )
++		unitPtr->reward(nation_array.player_recno);
++	else if( action==7 && unitPtr->home_camp_firm_recno )
++		unit_array.return_camp(COMMAND_PLAYER);
++	else if( action==8 && unitPtr->spy_recno )
++		spy_array[unitPtr->spy_recno]->notify_cloaked_nation_flag =
++			!spy_array[unitPtr->spy_recno]->notify_cloaked_nation_flag;
++	else if( action==9 && unitPtr->spy_recno )
++		spy_array[unitPtr->spy_recno]->drop_spy_identity();
++	else if( action==10 && unitPtr->rank_id!=RANK_KING )
++		unitPtr->resign(COMMAND_PLAYER);
++
++	info.disp();
++}
+ #endif
+ 
+ 
+-- 
+2.39.5 (Apple Git-154)
+
