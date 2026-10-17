@@ -1,0 +1,137 @@
+From 57b217c638686bb361c2a30ab059b4fd7ad3ee75 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sat, 17 Oct 2026 23:05:17 +0100
+Subject: [PATCH 20/20] ui: publish complete building rosters
+
+---
+ src/OINFO.cpp | 107 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 107 insertions(+)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index d33e815..951560f 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -88,6 +88,112 @@ static void publish_selected_object()
+ 	if( firm_array.selected_recno )
+ 	{
+ 		Firm* firmPtr = firm_array[firm_array.selected_recno];
++		unsigned long rosterSignature = firmPtr->firm_recno*131 + firmPtr->overseer_recno*17 + firmPtr->worker_count;
++		if( firmPtr->overseer_recno && !unit_array.is_deleted(firmPtr->overseer_recno) )
++		{
++			Unit* leaderPtr=unit_array[firmPtr->overseer_recno];
++			rosterSignature = rosterSignature*33 + leaderPtr->loyalty +
++				leaderPtr->skill.skill_level*3 + leaderPtr->skill.combat_level*5 +
++				(int)leaderPtr->hit_points;
++		}
++		for( int i=0; i<firmPtr->worker_count; ++i )
++		{
++			Worker* workerPtr=firmPtr->worker_array+i;
++			rosterSignature = rosterSignature*33 + workerPtr->name_id + workerPtr->skill_level*3 +
++				workerPtr->combat_level*5 + workerPtr->hit_points + workerPtr->worker_loyalty;
++		}
++		if( firmPtr->firm_id==FIRM_INN )
++		{
++			FirmInn* innPtr=(FirmInn*)firmPtr;
++			rosterSignature=rosterSignature*33+innPtr->inn_unit_count;
++			for( int i=0; i<innPtr->inn_unit_count; ++i )
++				rosterSignature=rosterSignature*33+innPtr->inn_unit_array[i].unit_id+
++					innPtr->inn_unit_array[i].hire_cost+innPtr->inn_unit_array[i].skill.skill_level;
++		}
++		else if( firmPtr->firm_id==FIRM_HARBOR )
++		{
++			FirmHarbor* harborPtr=(FirmHarbor*)firmPtr;
++			rosterSignature=rosterSignature*33+harborPtr->ship_count+harborPtr->build_queue_count;
++		}
++		else if( firmPtr->firm_id==FIRM_WAR_FACTORY )
++		{
++			FirmWar* warPtr=(FirmWar*)firmPtr;
++			rosterSignature=rosterSignature*33+warPtr->build_unit_id+warPtr->build_queue_count;
++		}
++		static int lastRosterFirm=0;
++		static unsigned long lastRosterSignature=0;
++		if( lastRosterFirm!=firmPtr->firm_recno || lastRosterSignature!=rosterSignature )
++		{
++			lastRosterFirm=firmPtr->firm_recno;
++			lastRosterSignature=rosterSignature;
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterReset(); });
++			if( firmPtr->overseer_recno && !unit_array.is_deleted(firmPtr->overseer_recno) )
++			{
++				Unit* leaderPtr=unit_array[firmPtr->overseer_recno];
++				const char* leaderRole=leaderPtr->rank_id==RANK_KING ? "King" : "Commander";
++				const char* leaderSkill=leaderPtr->skill.skill_id ? leaderPtr->skill.skill_des() : "Leadership";
++				EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterRow(
++					UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),$3,$4,$5,$6,$7,$8); },
++					leaderRole,leaderPtr->unit_name(),leaderSkill,leaderPtr->skill.skill_level,
++					leaderPtr->skill.combat_level,(int)leaderPtr->hit_points,leaderPtr->max_hit_points,
++					leaderPtr->loyalty,leaderPtr->rank_id==RANK_KING ? 1 : 2);
++			}
++			for( int i=0; i<firmPtr->worker_count; ++i )
++			{
++				Worker* workerPtr=firmPtr->worker_array+i;
++				const char* workerRole=firmPtr->firm_id==FIRM_CAMP ? "Soldier" :
++					firmPtr->firm_id==FIRM_BASE ? "Attendant" : "Worker";
++				const char* workerSkill=workerPtr->skill_id ?
++					Skill::skill_str_array[workerPtr->skill_id-1] : "Combat";
++				const char* workerName=race_res[workerPtr->race_id]->get_name(workerPtr->name_id);
++				EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterRow(
++					UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),$3,$4,$5,$6,$7,$8); },
++					workerRole,workerName,workerSkill,workerPtr->skill_level,
++					workerPtr->combat_level,workerPtr->hit_points,workerPtr->max_hit_points(),
++					workerPtr->loyalty(),workerPtr->spy_recno ? 3 : 0);
++			}
++			if( firmPtr->firm_id==FIRM_INN )
++			{
++				FirmInn* innPtr=(FirmInn*)firmPtr;
++				for( int i=0; i<innPtr->inn_unit_count; ++i )
++				{
++					InnUnit* candidatePtr=innPtr->inn_unit_array+i;
++					const char* candidateSkill=candidatePtr->skill.skill_id ?
++						candidatePtr->skill.skill_des() : "Untrained";
++					EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingFeatureRow(
++						"Candidate",UTF8ToString($0),UTF8ToString($1),$2,"Hire cost"); },
++						unit_res[candidatePtr->unit_id]->name,candidateSkill,candidatePtr->hire_cost);
++				}
++			}
++			else if( firmPtr->firm_id==FIRM_HARBOR )
++			{
++				FirmHarbor* harborPtr=(FirmHarbor*)firmPtr;
++				for( int i=0; i<harborPtr->ship_count; ++i )
++				{
++					int shipRecno=harborPtr->ship_recno_array[i];
++					if( shipRecno && !unit_array.is_deleted(shipRecno) )
++					{
++						Unit* shipPtr=unit_array[shipRecno];
++						EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingFeatureRow(
++							"Docked ship",UTF8ToString($0),"Ready in harbor",$1,"Health"); },
++							shipPtr->unit_name(),(int)shipPtr->hit_points);
++					}
++				}
++			}
++			else if( firmPtr->firm_id==FIRM_WAR_FACTORY )
++			{
++				FirmWar* warPtr=(FirmWar*)firmPtr;
++				if( warPtr->build_unit_id )
++					EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingFeatureRow(
++						"In production",UTF8ToString($0),"Currently being built",$1,"Progress"); },
++						unit_res[warPtr->build_unit_id]->name,(int)warPtr->build_progress_days);
++				for( int i=0; i<warPtr->build_queue_count; ++i )
++					EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingFeatureRow(
++						"Build queue",UTF8ToString($0),"Waiting",$1,"Position"); },
++						unit_res[warPtr->build_queue_array[i]]->name,i+1);
++			}
++		}
++		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterShow(true); });
+ 		const char* kind = "Structure";
+ 		const char* label1 = "Efficiency";
+ 		const char* label2 = "Staff";
+@@ -167,6 +273,7 @@ static void publish_selected_object()
+ 			firmPtr->own_firm(), firmPtr->under_construction, firmPtr->firm_recno);
+ 		return;
+ 	}
++	EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterShow(false); });
+ 
+ 	if( town_array.selected_recno )
+ 	{
+-- 
+2.39.5 (Apple Git-154)
+
