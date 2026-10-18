@@ -1,7 +1,7 @@
 From c4ee211845fa861f901b3bcaca0978bf9cf341a0 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sat, 17 Oct 2026 22:23:11 +0100
-Subject: [PATCH 16/22] ui: expose modern worker controls
+Subject: [PATCH 16/23] ui: expose modern worker controls
 
 ---
  src/OINFO.cpp | 76 +++++++++++++++++++++++++++++++++++++++++++++++++++

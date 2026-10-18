@@ -1,0 +1,43 @@
+From 1275e7a87de0e61571ad9f706df5a0d1443ccb37 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sun, 18 Oct 2026 13:00:29 +0100
+Subject: [PATCH 23/23] ui: use cleaner browser report font
+
+---
+ src/OSYS.cpp | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/OSYS.cpp b/src/OSYS.cpp
+index c43730f..6616a45 100644
+--- a/src/OSYS.cpp
++++ b/src/OSYS.cpp
+@@ -379,9 +379,13 @@ int Sys::init_objects()
+       font += locale_res.fontset;
+       font_std.init(font, 1);
+ 
++      #ifdef __EMSCRIPTEN__
++      font = "STD_";
++      #else
+       font = "SAN_";
++      #endif
+       font += locale_res.fontset;
+-      font_san.init(font, 0);
++      font_san.init(font, 1);
+ 
+       font = "MID_";
+       font += locale_res.fontset;
+@@ -404,7 +408,11 @@ int Sys::init_objects()
+    {
+       // fall back to original fonts
+       font_std.init("STD", 2);
++      #ifdef __EMSCRIPTEN__
++      font_san.init("STD", 1);      // cleaner browser report typography
++      #else
+       font_san.init("SAN", 0);      // 0-zero inter-character space
++      #endif
+       font_mid.init("MID");
+       font_small.init("SMAL");
+       font_news.init("NEWS");
+-- 
+2.39.5 (Apple Git-154)
+
