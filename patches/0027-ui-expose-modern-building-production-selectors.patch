@@ -1,0 +1,138 @@
+From 69eb8a3baf3ebfc2ced97c162e1443c39f816ddb Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sun, 18 Oct 2026 13:36:33 +0100
+Subject: [PATCH 27/27] ui: expose modern building production selectors
+
+---
+ src/OINFO.cpp | 70 ++++++++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 66 insertions(+), 4 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 4c060c5..d60e708 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -51,6 +51,7 @@
+ #include <OPOWER.h>
+ #include <OSITE.h>
+ #include <ORAWRES.h>
++#include <OTECHRES.h>
+ #include <ORACERES.h>
+ #include <OSKILL.h>
+ #include <OWALLRES.h>
+@@ -207,6 +208,7 @@ static void publish_selected_object()
+ 		int value2 = firmPtr->worker_count;
+ 		int value3 = firmPtr->under_construction ? 0 : 1;
+ 		const char* actionCode = "structure";
++		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingChoiceReset(); });
+ 		switch( firmPtr->firm_id )
+ 		{
+ 			case FIRM_BASE:
+@@ -219,7 +221,13 @@ static void publish_selected_object()
+ 			{
+ 				FirmFactory* p=(FirmFactory*)firmPtr; kind="Workshop"; actionCode="factory";
+ 				label1="Raw stock"; value1=(int)p->raw_stock_qty; label2="Goods"; value2=(int)p->stock_qty;
+-				label3="Efficiency"; value3=(int)p->productivity; break;
++				label3="Efficiency"; value3=(int)p->productivity;
++				for( int productId=1; productId<=MAX_PRODUCT; ++productId )
++					EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingChoice(
++						$0,UTF8ToString($1),UTF8ToString($2),$3); },productId,
++						raw_res.product_name(productId),raw_res[productId]->name,
++						p->product_raw_id==productId);
++				break;
+ 			}
+ 			case FIRM_INN:
+ 			{
+@@ -249,19 +257,39 @@ static void publish_selected_object()
+ 			{
+ 				FirmResearch* p=(FirmResearch*)firmPtr; kind="Science Tower"; actionCode="research";
+ 				label1="Progress"; value1=(int)p->complete_percent; label2="Researchers"; value2=p->worker_count;
+-				label3="Project selected"; value3=p->tech_id!=0; break;
++				label3="Project selected"; value3=p->tech_id!=0;
++				for( int techId=1; techId<=tech_res.tech_count; ++techId )
++					if( tech_res[techId]->can_research(firmPtr->nation_recno) || p->tech_id==techId )
++						EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingChoice(
++							$0,UTF8ToString($1),"Choose this technology for the selected tower.",$2); },
++							techId,tech_res[techId]->tech_des(),p->tech_id==techId);
++				break;
+ 			}
+ 			case FIRM_WAR_FACTORY:
+ 			{
+ 				FirmWar* p=(FirmWar*)firmPtr; kind="War Factory"; actionCode="war";
+ 				label1="Build progress"; value1=(int)p->build_progress_days; label2="Queue"; value2=p->build_queue_count;
+-				label3="Workers"; value3=p->worker_count; break;
++				label3="Workers"; value3=p->worker_count;
++				for( int unitId=1; unitId<=MAX_UNIT_TYPE; ++unitId )
++					if( unit_res[unitId]->unit_class==UNIT_CLASS_WEAPON &&
++						unit_res[unitId]->get_nation_tech_level(firmPtr->nation_recno)>0 )
++						EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingChoice(
++							$0,UTF8ToString($1),"Add one weapon to the production queue.",false); },
++							unitId,unit_res[unitId]->name);
++				break;
+ 			}
+ 			case FIRM_HARBOR:
+ 			{
+ 				FirmHarbor* p=(FirmHarbor*)firmPtr; kind="Harbor"; actionCode="harbor";
+ 				label1="Ships docked"; value1=p->ship_count; label2="Build queue"; value2=p->build_queue_count;
+-				label3="Workers"; value3=p->worker_count; break;
++				label3="Workers"; value3=p->worker_count;
++				for( int unitId=1; unitId<=MAX_UNIT_TYPE; ++unitId )
++					if( unit_res[unitId]->unit_class==UNIT_CLASS_SHIP &&
++						unit_res[unitId]->get_nation_tech_level(firmPtr->nation_recno)>0 )
++						EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingChoice(
++							$0,UTF8ToString($1),"Add one ship to the construction queue.",false); },
++							unitId,unit_res[unitId]->name);
++				break;
+ 			}
+ 			case FIRM_MONSTER:
+ 			{
+@@ -277,6 +305,12 @@ static void publish_selected_object()
+ 			label1, value1, label2, value2, label3, value3, actionCode,
+ 			firmPtr->own_firm(), firmPtr->under_construction, firmPtr->firm_recno);
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterMode(UTF8ToString($0)); }, actionCode);
++		if( firmPtr->firm_id==FIRM_MINE )
++		{
++			FirmMine* minePtr=(FirmMine*)firmPtr;
++			const char* mineral=minePtr->raw_id ? raw_res[minePtr->raw_id]->name : "No mineral deposit";
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingMineral(UTF8ToString($0)); },mineral);
++		}
+ 		return;
+ 	}
+ 	EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterShow(false); });
+@@ -480,6 +514,34 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_building_item_action(int action, int va
+ 	info.disp();
+ }
+ 
++extern "C" EMSCRIPTEN_KEEPALIVE void web_building_choice(int action, int value)
++{
++	if( !firm_array.selected_recno )
++		return;
++	Firm* firmPtr=firm_array[firm_array.selected_recno];
++	if( !firmPtr->own_firm() || firmPtr->under_construction )
++		return;
++	if( action==1 && firmPtr->firm_id==FIRM_RESEARCH &&
++		 value>=1 && value<=tech_res.tech_count && tech_res[value]->can_research(firmPtr->nation_recno) )
++		((FirmResearch*)firmPtr)->start_research(value,COMMAND_PLAYER);
++	else if( action==2 && firmPtr->firm_id==FIRM_FACTORY && value>=1 && value<=MAX_PRODUCT )
++	{
++		FirmFactory* factoryPtr=(FirmFactory*)firmPtr;
++		factoryPtr->set_product(value);
++		factoryPtr->stock_qty=0;
++		factoryPtr->raw_stock_qty=0;
++	}
++	else if( action==3 && firmPtr->firm_id==FIRM_WAR_FACTORY && value>=1 && value<=MAX_UNIT_TYPE &&
++		 unit_res[value]->unit_class==UNIT_CLASS_WEAPON &&
++		 unit_res[value]->get_nation_tech_level(firmPtr->nation_recno)>0 )
++		((FirmWar*)firmPtr)->add_queue(value,1);
++	else if( action==4 && firmPtr->firm_id==FIRM_HARBOR && value>=1 && value<=MAX_UNIT_TYPE &&
++		 unit_res[value]->unit_class==UNIT_CLASS_SHIP &&
++		 unit_res[value]->get_nation_tech_level(firmPtr->nation_recno)>0 )
++		((FirmHarbor*)firmPtr)->add_queue(value,1);
++	info.disp();
++}
++
+ extern "C" EMSCRIPTEN_KEEPALIVE int web_unit_can_build(int firmId)
+ {
+ 	if( !unit_array.selected_recno || firmId<1 || firmId>MAX_FIRM_TYPE )
+-- 
+2.39.5 (Apple Git-154)
+
