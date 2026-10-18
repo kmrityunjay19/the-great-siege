@@ -1,0 +1,96 @@
+From 7dbe00bc4acfee9b3d95bea81b0fdbcc27ca2c6e Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sun, 18 Oct 2026 12:15:23 +0100
+Subject: [PATCH 22/22] ui: expose loyalty direction in browser panels
+
+---
+ src/OINFO.cpp | 28 ++++++++++++++++++----------
+ 1 file changed, 18 insertions(+), 10 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index fe50e09..4b3e78a 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -94,13 +94,14 @@ static void publish_selected_object()
+ 			Unit* leaderPtr=unit_array[firmPtr->overseer_recno];
+ 			rosterSignature = rosterSignature*33 + leaderPtr->loyalty +
+ 				leaderPtr->skill.skill_level*3 + leaderPtr->skill.combat_level*5 +
+-				(int)leaderPtr->hit_points;
++				(int)leaderPtr->hit_points + leaderPtr->target_loyalty*7;
+ 		}
+ 		for( int i=0; i<firmPtr->worker_count; ++i )
+ 		{
+ 			Worker* workerPtr=firmPtr->worker_array+i;
+ 			rosterSignature = rosterSignature*33 + workerPtr->name_id + workerPtr->skill_level*3 +
+-				workerPtr->combat_level*5 + workerPtr->hit_points + workerPtr->worker_loyalty;
++				workerPtr->combat_level*5 + workerPtr->hit_points + workerPtr->worker_loyalty +
++				workerPtr->target_loyalty(firmPtr->firm_recno)*7;
+ 		}
+ 		if( firmPtr->firm_id==FIRM_INN )
+ 		{
+@@ -133,10 +134,11 @@ static void publish_selected_object()
+ 				const char* leaderRole=leaderPtr->rank_id==RANK_KING ? "King" : "Commander";
+ 				const char* leaderSkill=leaderPtr->skill.skill_id ? leaderPtr->skill.skill_des() : "Leadership";
+ 				EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterRow(
+-					UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),$3,$4,$5,$6,$7,$8); },
++					UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),$3,$4,$5,$6,$7,$8,$9); },
+ 					leaderRole,leaderPtr->unit_name(),leaderSkill,leaderPtr->skill.skill_level,
+ 					leaderPtr->skill.combat_level,(int)leaderPtr->hit_points,leaderPtr->max_hit_points,
+-					leaderPtr->loyalty,leaderPtr->rank_id==RANK_KING ? 1 : 2);
++					leaderPtr->loyalty,leaderPtr->rank_id==RANK_KING ? 1 : 2,
++					(leaderPtr->target_loyalty>leaderPtr->loyalty)-(leaderPtr->target_loyalty<leaderPtr->loyalty));
+ 			}
+ 			for( int i=0; i<firmPtr->worker_count; ++i )
+ 			{
+@@ -146,11 +148,14 @@ static void publish_selected_object()
+ 				const char* workerSkill=workerPtr->skill_id ?
+ 					Skill::skill_str_array[workerPtr->skill_id-1] : "Combat";
+ 				const char* workerName=race_res[workerPtr->race_id]->get_name(workerPtr->name_id);
++				int workerLoyalty=workerPtr->loyalty();
++				int workerTargetLoyalty=workerPtr->target_loyalty(firmPtr->firm_recno);
+ 				EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterRow(
+-					UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),$3,$4,$5,$6,$7,$8); },
++					UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),$3,$4,$5,$6,$7,$8,$9); },
+ 					workerRole,workerName,workerSkill,workerPtr->skill_level,
+ 					workerPtr->combat_level,workerPtr->hit_points,workerPtr->max_hit_points(),
+-					workerPtr->loyalty(),workerPtr->spy_recno ? 3 : 0);
++					workerLoyalty,workerPtr->spy_recno ? 3 : 0,
++					(workerTargetLoyalty>workerLoyalty)-(workerTargetLoyalty<workerLoyalty));
+ 			}
+ 			if( firmPtr->firm_id==FIRM_INN )
+ 			{
+@@ -302,11 +307,13 @@ static void publish_selected_object()
+ 				EM_ASM({ if(window.siegeHUD) window.siegeHUD.townQueue($0,$1); },skillId,queueCount);
+ 			}
+ 			EM_ASM({ if(window.siegeHUD) window.siegeHUD.selection(
+-				"town",UTF8ToString($0),$1,$2,$3,$4,true,"town:"+$5,$6,$7,$8); },
++				"town",UTF8ToString($0),$1,$2,$3,$4,true,"town:"+$5,$6,$7,$8,$9); },
+ 				townPtr->town_name(), townPtr->population, townPtr->jobless_population,
+ 				townPtr->average_loyalty(), townPtr->has_linked_own_camp,
+ 				townPtr->town_recno, townPtr->train_unit_recno!=0,
+-				townPtr->auto_collect_tax_loyalty, townPtr->auto_grant_loyalty);
++				townPtr->auto_collect_tax_loyalty, townPtr->auto_grant_loyalty,
++				(townPtr->average_target_loyalty()>townPtr->average_loyalty())-
++				(townPtr->average_target_loyalty()<townPtr->average_loyalty()));
+ 		}
+ 		else
+ 			EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
+@@ -356,12 +363,13 @@ static void publish_selected_object()
+ 				((unitPtr->home_camp_firm_recno!=0)<<8) | ((unitPtr->spy_recno!=0)<<9) |
+ 				(spyNotify<<10);
+ 			EM_ASM({ if(window.siegeHUD) try { window.siegeHUD.personLite(
+-				UTF8ToString($0),UTF8ToString($1),$2,$3,$4,$5,$6,$7,$8,"unit:"+$9);
++				UTF8ToString($0),UTF8ToString($1),$2,$3,$4,$5,$6,$7,$8,"unit:"+$9,$10);
+ 				} catch(error) { console.error("Worker panel error",error);
+ 				window.siegeHUD.notice("Worker panel error: "+error.message); } },
+ 				unitPtr->unit_name(),role,(int)unitPtr->hit_points,unitPtr->max_hit_points,
+ 				unitPtr->loyalty,unitPtr->skill.combat_level,unitPtr->skill.skill_level,
+-				spySkill,flags,unit_array.selected_recno);
++				spySkill,flags,unit_array.selected_recno,
++				(unitPtr->target_loyalty>unitPtr->loyalty)-(unitPtr->target_loyalty<unitPtr->loyalty));
+ 			return;
+ 		}
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
+-- 
+2.39.5 (Apple Git-154)
+

@@ -1,7 +1,7 @@
 From cbc6c5b133eebfe2464aad13e8163b5cf1c64495 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sat, 17 Oct 2026 22:30:26 +0100
-Subject: [PATCH 18/21] fix: defer worker build checks
+Subject: [PATCH 18/22] fix: defer worker build checks
 
 ---
  src/OINFO.cpp | 32 ++++++++++++++------------------
