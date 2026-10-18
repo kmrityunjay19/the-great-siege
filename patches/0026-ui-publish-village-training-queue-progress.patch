@@ -1,0 +1,39 @@
+From 024af75b2dfa5e0a8d9e1ed7be2c13d1f78726af Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sun, 18 Oct 2026 13:28:47 +0100
+Subject: [PATCH 26/26] ui: publish village training queue progress
+
+---
+ src/OINFO.cpp | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index fafe5c4..4c060c5 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -306,6 +306,22 @@ static void publish_selected_object()
+ 						++queueCount;
+ 				EM_ASM({ if(window.siegeHUD) window.siegeHUD.townQueue($0,$1); },skillId,queueCount);
+ 			}
++			int activeSkillId=0;
++			int trainingProgress=0;
++			if( townPtr->train_unit_recno && !unit_array.is_deleted(townPtr->train_unit_recno) )
++			{
++				Unit* traineePtr=unit_array[townPtr->train_unit_recno];
++				activeSkillId=traineePtr->skill.skill_id;
++				if( !activeSkillId && traineePtr->spy_recno )
++					activeSkillId=SKILL_SPYING;
++				int totalDays=config.fast_build ? TOTAL_TRAIN_DAYS/2 : TOTAL_TRAIN_DAYS;
++				int totalFrames=MAX(1,totalDays*FRAMES_PER_DAY);
++				trainingProgress=MIN(100,MAX(0,
++					(int)(sys.frame_count-townPtr->start_train_frame_no)*100/totalFrames));
++			}
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.townTraining(
++				$0,$1,$2,$3); },activeSkillId,trainingProgress,
++				townPtr->train_queue_count+(townPtr->train_unit_recno ? 1 : 0),MAX_TRAIN_QUEUE);
+ 			EM_ASM({ if(window.siegeHUD) window.siegeHUD.selection(
+ 				"town",UTF8ToString($0),$1,$2,$3,$4,true,"town:"+$5,$6,$7,$8,$9); },
+ 				townPtr->town_name(), townPtr->population, townPtr->jobless_population,
+-- 
+2.39.5 (Apple Git-154)
+

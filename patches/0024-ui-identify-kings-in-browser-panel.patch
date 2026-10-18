@@ -1,7 +1,7 @@
 From 3cea278be4a7b7daefb9ccb14e5f4e1906c3415e Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sun, 18 Oct 2026 13:08:22 +0100
-Subject: [PATCH 24/25] ui: identify kings in browser panel
+Subject: [PATCH 24/26] ui: identify kings in browser panel
 
 ---
  src/OINFO.cpp | 2 +-
