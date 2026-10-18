@@ -1,7 +1,7 @@
 From 1275e7a87de0e61571ad9f706df5a0d1443ccb37 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sun, 18 Oct 2026 13:00:29 +0100
-Subject: [PATCH 23/23] ui: use cleaner browser report font
+Subject: [PATCH 23/24] ui: use cleaner browser report font
 
 ---
  src/OSYS.cpp | 10 +++++++++-

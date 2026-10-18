@@ -1,0 +1,25 @@
+From 3cea278be4a7b7daefb9ccb14e5f4e1906c3415e Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sun, 18 Oct 2026 13:08:22 +0100
+Subject: [PATCH 24/24] ui: identify kings in browser panel
+
+---
+ src/OINFO.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 4b3e78a..fafe5c4 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -349,7 +349,7 @@ static void publish_selected_object()
+ 		Unit* unitPtr=unit_array[unit_array.selected_recno];
+ 		if( unitPtr->race_id && unit_res[unitPtr->unit_id]->unit_class == UNIT_CLASS_HUMAN )
+ 		{
+-			const char* role = unitPtr->spy_recno ? "Spy" :
++			const char* role = unitPtr->rank_id==RANK_KING ? "King" : unitPtr->spy_recno ? "Spy" :
+ 				unitPtr->skill.skill_id ? unitPtr->skill.skill_des() : "Peasant";
+ 			int isOwn = unitPtr->is_own();
+ 			int isOwnSpy = unitPtr->is_own_spy();
+-- 
+2.39.5 (Apple Git-154)
+
