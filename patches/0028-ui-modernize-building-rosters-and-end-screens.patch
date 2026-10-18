@@ -1,0 +1,134 @@
+From e2cc259bee438a019e897da4c9f1458e49762325 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sun, 18 Oct 2026 14:46:08 +0100
+Subject: [PATCH] ui: modernize building rosters and end screens
+
+---
+ src/OGAMEND.cpp  | 11 +++++++++++
+ src/OGAMHALL.cpp |  9 +++++++++
+ src/OINFO.cpp    | 10 ++++++++++
+ src/OSYS.cpp     |  8 ++++++++
+ 4 files changed, 38 insertions(+)
+
+diff --git a/src/OGAMEND.cpp b/src/OGAMEND.cpp
+index 5a4d047..ca84820 100644
+--- a/src/OGAMEND.cpp
++++ b/src/OGAMEND.cpp
+@@ -33,6 +33,9 @@
+ #include <OFONT.h>
+ #include <OMOUSE.h>
+ #include <OIMGRES.h>
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#endif
+ #include <ORACERES.h>
+ #include <OGAME.h>
+ #include <OGAMHALL.h>
+@@ -97,6 +100,10 @@ void Game::game_end(int winNationRecno, int playerDestroyed, int surrenderToNati
+ 	if( game_has_ended && !retireFlag )		// don't repeat displaying the winning/losing screen
+ 		return;
+ 
++	#ifdef __EMSCRIPTEN__
++	EM_ASM({ if(window.siegeHUD) window.siegeHUD.endScreen(true); });
++	#endif
++
+ 	// ------ quit any menu mode ------//
+ 	if( option_menu.is_active() )
+ 	{
+@@ -253,6 +260,10 @@ void Game::game_end(int winNationRecno, int playerDestroyed, int surrenderToNati
+ 			config.fog_of_war  = 0;
+ 		}
+ 	}
++
++	#ifdef __EMSCRIPTEN__
++	EM_ASM({ if(window.siegeHUD) window.siegeHUD.endScreen(false); });
++	#endif
+ }
+ //----------- End of function Game::game_end ---------//
+ 
+diff --git a/src/OGAMHALL.cpp b/src/OGAMHALL.cpp
+index c5f57ce..716a95a 100644
+--- a/src/OGAMHALL.cpp
++++ b/src/OGAMHALL.cpp
+@@ -28,6 +28,9 @@
+ #include <ODATE.h>
+ #include <OSTR.h>
+ #include <OSYS.h>
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#endif
+ #include <OFONT.h>
+ #include <OMOUSE.h>
+ #include <OIMGRES.h>
+@@ -147,6 +150,9 @@ int HallOfFame::write_hall_of_fame()
+ //
+ void HallOfFame::disp_hall_of_fame()
+ {
++	#ifdef __EMSCRIPTEN__
++	EM_ASM({ if(window.siegeHUD) window.siegeHUD.endScreen(true); });
++	#endif
+ 	vga_util.disp_image_file("HALLFAME");
+ 
+ 	//---------- display hall of fame records ------------//
+@@ -162,6 +168,9 @@ void HallOfFame::disp_hall_of_fame()
+ 	mouse.wait_press(60);		// 60 seconds to time out
+ 
+ 	vga_util.finish_disp_image_file();
++	#ifdef __EMSCRIPTEN__
++	EM_ASM({ if(window.siegeHUD) window.siegeHUD.endScreen(false); });
++	#endif
+ }
+ //------- End of function HallOfFame::disp_hall_of_fame -----//
+ 
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index d60e708..92d812a 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -305,6 +305,16 @@ static void publish_selected_object()
+ 			label1, value1, label2, value2, label3, value3, actionCode,
+ 			firmPtr->own_firm(), firmPtr->under_construction, firmPtr->firm_recno);
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterMode(UTF8ToString($0)); }, actionCode);
++		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingCapacity($0,$1); },
++			firmPtr->worker_count,MAX_WORKER);
++		if( firmPtr->firm_id==FIRM_RESEARCH )
++		{
++			FirmResearch* researchPtr=(FirmResearch*)firmPtr;
++			const char* projectName=researchPtr->tech_id ?
++				tech_res[researchPtr->tech_id]->tech_des() : "No research selected";
++			EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingProgress(
++				UTF8ToString($0),$1); },projectName,(int)researchPtr->complete_percent);
++		}
+ 		if( firmPtr->firm_id==FIRM_MINE )
+ 		{
+ 			FirmMine* minePtr=(FirmMine*)firmPtr;
+diff --git a/src/OSYS.cpp b/src/OSYS.cpp
+index 6616a45..5bd1ee9 100644
+--- a/src/OSYS.cpp
++++ b/src/OSYS.cpp
+@@ -399,7 +399,11 @@ int Sys::init_objects()
+       font += locale_res.fontset;
+       font_news.init(font);
+ 
++      #ifdef __EMSCRIPTEN__
++      font = "STD_";                // cleaner result and conclusion typography in-browser
++      #else
+       font = "CASA_";
++      #endif
+       font += locale_res.fontset;
+       font_bible.init(font, 1, 1);
+       font_bard.init(font, 0);
+@@ -416,7 +420,11 @@ int Sys::init_objects()
+       font_mid.init("MID");
+       font_small.init("SMAL");
+       font_news.init("NEWS");
++      #ifdef __EMSCRIPTEN__
++      font_bible.init("STD", 1, 1); // modern readable browser conclusion screens
++      #else
+       font_bible.init("CASA", 1, 3);
++      #endif
+       font_bard.init("CASA", 0);
+    }
+ 
+-- 
+2.39.5 (Apple Git-154)
+
