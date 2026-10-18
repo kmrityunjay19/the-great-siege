@@ -1,7 +1,7 @@
 From 8c9f06c370ba2986c2f6b6ddac091105eea996f4 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sat, 17 Oct 2026 21:35:29 +0100
-Subject: [PATCH 12/24] ui: publish selected town details to browser HUD
+Subject: [PATCH 12/25] ui: publish selected town details to browser HUD
 
 ---
  src/OINFO.cpp | 52 +++++++++++++++++++++++++++++++++++++++++++++++++++

@@ -1,0 +1,79 @@
+From 5dbafeaaaf0e3c244bb6ed65b3c7018649c2dfba Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Sun, 18 Oct 2026 13:14:37 +0100
+Subject: [PATCH 25/25] ui: consolidate browser menu and training controls
+
+---
+ src/OINGMENU.cpp | 23 ++++++++++++++++++++++-
+ src/OTUTOR.cpp   |  3 +++
+ 2 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/src/OINGMENU.cpp b/src/OINGMENU.cpp
+index 7b5bb28..099a6c9 100644
+--- a/src/OINGMENU.cpp
++++ b/src/OINGMENU.cpp
+@@ -104,7 +104,17 @@ void InGameMenu::enter(char untilExitFlag)
+    game_menu_option_flag[6] = 0;    // browser fullscreen is controlled by the browser
+    siege_ui_begin("pause","Your kingdom awaits");
+    const char* labels[]={"Settings","Save game","Load game","Training","Retire","Main menu","","Continue playing"};
+-   for(int i=0;i<GAME_OPTION_COUNT;i++)if(game_menu_option_flag[i])siege_ui_item(i+1,labels[i],i==7?"Return to your kingdom.":"Choose this action, then press Confirm.");
++   const char* descriptions[]={
++      "Adjust sound, game speed, map scrolling, tooltips and display preferences.",
++      "Save the current state of your kingdom in a new or existing save slot.",
++      "Leave the current session and restore a previously saved kingdom.",
++      "Choose a guided lesson and practise the game’s military, economic and diplomatic systems.",
++      "End this reign and show its final score. Unsaved progress will be lost.",
++      "Leave this reign and return to the title screen. Unsaved progress will be lost.",
++      "",
++      "Close this menu and return to your kingdom."
++   };
++   for(int i=0;i<GAME_OPTION_COUNT;i++)if(game_menu_option_flag[i])siege_ui_item(i+1,labels[i],descriptions[i]);
+    siege_pause_action=siege_ui_wait();
+    if(!siege_pause_action)siege_pause_action=8;
+ #endif
+@@ -256,8 +266,13 @@ int InGameMenu::detect()
+       case 5:     // retire
+          if( nation_array.player_recno )     // only when the player's kingdom still exists
+          {
++#ifdef __EMSCRIPTEN__
++            // The modern menu's explicit "Retire kingdom" action is the single confirmation.
++            {
++#else
+             if( box.ask(_("Do you really want to retire?"), _("Yes"), _("No"), 175, 320) )
+             {
++#endif
+                if( remote.is_enable() )
+                {
+                   // BUGHERE : message will not be sent out
+@@ -280,8 +295,14 @@ int InGameMenu::detect()
+             boxX1 = 115;
+          #endif
+ 
++#ifdef __EMSCRIPTEN__
++         // The modern menu already describes the loss of unsaved progress and
++         // uses an explicit action label, so do not open a second legacy dialog.
++         if( true )
++#else
+          if( !nation_array.player_recno ||
+              box.ask( _("Do you really want to quit to the Main Menu?"), _("Yes"), _("No"), boxX1, 350 ) )
++#endif
+          {
+             if( remote.is_enable() && nation_array.player_recno )
+             {
+diff --git a/src/OTUTOR.cpp b/src/OTUTOR.cpp
+index ebea659..fbfc7a0 100644
+--- a/src/OTUTOR.cpp
++++ b/src/OTUTOR.cpp
+@@ -488,6 +488,9 @@ void Tutor::disp()
+ 			UTF8ToString($0),$1,$2); }, webTextBlock->text_ptr,
+ 			cur_text_block_id, text_block_count);
+ 	}
++	// The browser training panel replaces the native tutorial bar completely.
++	// Its controls call web_tutorial_action(), which Tutor::detect() handles.
++	return;
+ #endif
+ 	vga.use_back();
+ 
+-- 
+2.39.5 (Apple Git-154)
+

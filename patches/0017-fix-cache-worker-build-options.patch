@@ -1,7 +1,7 @@
 From a06ff99cb44b20b44a6576cf2d9fc96ddabe7a0d Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sat, 17 Oct 2026 22:27:00 +0100
-Subject: [PATCH 17/24] fix: cache worker build options
+Subject: [PATCH 17/25] fix: cache worker build options
 
 ---
  src/OINFO.cpp | 24 +++++++++++++-----------
