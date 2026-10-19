@@ -142,14 +142,18 @@
       <p id="musiccredit">Original artwork and sound effects remain part of the GPL game data. The separately licensed original soundtrack is not included in this renamed edition. This edition is not endorsed by Enlight Software.</p>
     </div>
   </div>
-  <script src="siege-pages.js"></script>
-  <script src="siege-hud.js"></script>
+  <script src="siege-pages.js?v=20261019-2"></script>
+  <script src="siege-hud.js?v=20261019-2"></script>
   <script>
     var siegeRuntimeReady = false;
     var statusEl = document.getElementById('status');
     var barEl = document.getElementById('bar');
     var barFill = document.getElementById('barfill');
     var Module = {
+      // Version runtime assets so a normal refresh loads one coherent build.
+      locateFile: function (path) {
+        return path + (path.indexOf('?') < 0 ? '?v=20261019-2' : '&v=20261019-2');
+      },
       canvas: (function () {
         var c = document.getElementById('canvas');
         c.addEventListener('webglcontextlost', function (e) {
@@ -210,7 +214,7 @@
         if (creditsEl) creditsEl.style.display = 'none';
         document.body.classList.add('ready');   // activate the mobile touch overlay (game is now interactive)
         var s = document.createElement('script');
-        s.src = 'extras.js';
+        s.src = 'extras.js?v=20261019-2';
         s.onerror = function () { console.warn('extras package failed to load'); };
         document.body.appendChild(s);
         // The engine detected its data dirs at boot, BEFORE extras.data mounted, so
