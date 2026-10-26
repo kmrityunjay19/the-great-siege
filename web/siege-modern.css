@@ -50,3 +50,13 @@ body:has(#siege-pages:not([hidden])) #siege-hud,body:has(#siege-pages:not([hidde
 #siege-canvas-veil{position:fixed;left:0;right:0;top:0;height:var(--hud-height);z-index:5;background:#14272b;pointer-events:none}
 #siege-canvas-veil[hidden]{display:none!important}
 body:not(.siege-playing) #siege-canvas-veil{display:block}
+
+/* Kingdom Council: compact, monochrome data-grid treatment. */
+#siege-report .record-row,
+#siege-report .record-row:nth-child(even),
+#siege-report .record-row.section-start{background:#172d32!important;border-top:0;border-left:0;margin-top:0;height:44px}
+#siege-report .record-row.section-start{margin-top:12px;border-top:1px solid #35504f}
+#siege-report button.record-cell{white-space:nowrap;border-left:0!important;border-right:0!important;color:#d7e0d9;font-weight:500}
+#siege-report button.record-cell:hover{background:#263f40;color:#f0d39a}
+#siege-report .record-row:first-child button.record-cell,
+#siege-report .record-row:nth-child(2) button.record-cell{font-weight:650;color:#cbd5ce;letter-spacing:.01em}
