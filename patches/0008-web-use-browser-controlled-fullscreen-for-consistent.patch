@@ -1,7 +1,7 @@
 From 23992bb36591bb6239ba1c633eee719d51bee1ee Mon Sep 17 00:00:00 2001
 From: Local Build <local-build@localhost>
 Date: Sat, 17 Oct 2026 20:01:35 +0100
-Subject: [PATCH 08/27] web: use browser-controlled fullscreen for consistent
+Subject: [PATCH 08/30] web: use browser-controlled fullscreen for consistent
  canvas sizing
 
 ---

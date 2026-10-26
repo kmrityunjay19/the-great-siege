@@ -1,0 +1,754 @@
+From 4d9c64eea325ab3bc24e24b33ef7e860688bb0d0 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Mon, 26 Oct 2026 15:43:32 +0000
+Subject: [PATCH 30/30] Modernize web presentation and browser controls
+
+---
+ include/web_siege_present.h | 21 +++++++++++++++++++++
+ src/OBOX.cpp                | 19 +++++++++++++++++++
+ src/OBUTT3D.cpp             |  6 ++++++
+ src/OBUTTCUS.cpp            |  2 ++
+ src/OBUTTON.cpp             |  2 ++
+ src/OFONT.cpp               |  5 +++++
+ src/OGAMEND.cpp             | 29 ++++++++++++++++++++++++++---
+ src/OGAMHALL.cpp            | 11 ++++++++++-
+ src/OHELP.cpp               |  7 +++++++
+ src/OINFO.cpp               | 24 ++++++++++++++++++++++++
+ src/ONEWS.cpp               |  8 +++++++-
+ src/OOPTMENU.cpp            |  1 +
+ src/OR_TOWN.cpp             |  3 ++-
+ src/OR_TRADE.cpp            | 29 +++++++++++++++--------------
+ src/OSYS.cpp                |  2 ++
+ src/OSYS2.cpp               | 22 ++++++++++++++++++++--
+ src/OSaveGameArray.cpp      |  6 ++++--
+ src/OVBROWSE.cpp            |  4 ++++
+ src/OVGA.cpp                |  4 ++++
+ src/OVGABUF2.cpp            |  6 ++++++
+ 20 files changed, 187 insertions(+), 24 deletions(-)
+ create mode 100644 include/web_siege_present.h
+
+diff --git a/include/web_siege_present.h b/include/web_siege_present.h
+new file mode 100644
+index 0000000..f212ccb
+--- /dev/null
++++ b/include/web_siege_present.h
+@@ -0,0 +1,21 @@
++#pragma once
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#include <string>
++inline void siege_present_begin(const char* kind,int mode=0,int reset=1) {
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.begin(UTF8ToString($0),$1,$2);},kind,mode,reset);
++}
++inline void siege_present_end() { EM_ASM({if(window.siegePresentation)window.siegePresentation.end();}); }
++inline void siege_present_text(int x,int y,int h,const char* text) {
++ if(!text || !*text)return;
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.text($0,$1,$2,UTF8ToString($3));},x,y,h,text);
++}
++inline void siege_present_button(int x1,int y1,int x2,int y2,const char* text,int enabled,int pushed) {
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.button($0,$1,$2,$3,UTF8ToString($4),$5,$6);},x1,y1,x2,y2,text?text:"Action",enabled,pushed);
++}
++#else
++inline void siege_present_begin(const char*,int=0,int=1){}
++inline void siege_present_end(){}
++inline void siege_present_text(int,int,int,const char*){}
++inline void siege_present_button(int,int,int,int,const char*,int,int){}
++#endif
+diff --git a/src/OBOX.cpp b/src/OBOX.cpp
+index 6102b3e..2111cb4 100644
+--- a/src/OBOX.cpp
++++ b/src/OBOX.cpp
+@@ -1,3 +1,4 @@
++#include <web_siege_ui.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -125,6 +126,9 @@ void Box::paint(int downCentre)
+ //
+ void Box::close()
+ {
++#ifdef __EMSCRIPTEN__
++ EM_ASM({if(window.siegeDialog)window.siegeDialog.closeProgress();});
++#endif
+ 	err_when(!opened_flag);		// double open
+ 
+ 	vga_front.rest_area_common_buf();
+@@ -291,6 +295,12 @@ void Box::ask_button(Button& buttonOk, Button& buttonCancel, char* strOk, char*
+ //
+ int Box::ask(const char* msgStr, const char* buttonDes1, const char* buttonDes2, int x1, int y1)
+ {
++#ifdef __EMSCRIPTEN__
++ siege_page_choice=-1;
++ EM_ASM({window.siegeDialog.show(UTF8ToString($0),UTF8ToString($1),UTF8ToString($2));},msgStr,buttonDes1?buttonDes1:"Yes",buttonDes2?buttonDes2:"No");
++ while(siege_page_choice<0)emscripten_sleep(16);
++ int webResult=siege_page_choice;EM_ASM({window.siegeDialog.close();});return webResult;
++#endif
+    int rc;
+ 
+    calc_size(msgStr,BOX_TOP_MARGIN+BOX_BOTTOM_MARGIN,x1,y1);   // calculate x1, y1, x2, y2 depended on the msgStr
+@@ -323,6 +333,12 @@ int Box::ask(const char* msgStr, const char* buttonDes1, const char* buttonDes2,
+ //
+ void Box::msg(const char* msgStr, int enableTimeOut, int x1, int y1)
+ {
++#ifdef __EMSCRIPTEN__
++ siege_page_choice=-1;
++ EM_ASM({window.siegeDialog.show(UTF8ToString($0),"Continue","");},msgStr);
++ while(siege_page_choice<0)emscripten_sleep(16);
++ EM_ASM({window.siegeDialog.close();});return;
++#endif
+ 	int savedUseBack = vga.use_back_buf;
+ 
+ 	vga.use_front();
+@@ -387,6 +403,9 @@ void Box::print(char* formatStr, ... )
+ //
+ void Box::tell(const char* tellStr, int x1, int y1)
+ {
++#ifdef __EMSCRIPTEN__
++ EM_ASM({if(window.siegeDialog)window.siegeDialog.progress(UTF8ToString($0));},tellStr);
++#endif
+    calc_size(tellStr,BOX_TOP_MARGIN+BOX_BOTTOM_MARGIN,x1,y1);   // calculate x1, y1, x2, y2 depended on the tellStr
+ 
+    paint(1);
+diff --git a/src/OBUTT3D.cpp b/src/OBUTT3D.cpp
+index dc2534c..951c7f9 100644
+--- a/src/OBUTT3D.cpp
++++ b/src/OBUTT3D.cpp
+@@ -1,3 +1,4 @@
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -182,6 +183,11 @@ void Button3D::paint(int defIsPushed)
+ 	if( !init_flag )
+ 		return;
+ 
++ const char* webLabel=help_code;
++#ifdef __EMSCRIPTEN__
++ for(int i=0;i<help.help_info_count;++i)if(!strcmp(help.help_info_array[i].help_code,help_code)){webLabel=help.help_info_array[i].help_title;break;}
++#endif
++ siege_present_button(x1,y1,x2,y2,webLabel,enable_flag,pushed_flag);
+ 	if( !vga.use_back_buf )
+ 		mouse.hide_area(x1, y1, x2, y2 );
+ 
+diff --git a/src/OBUTTCUS.cpp b/src/OBUTTCUS.cpp
+index 77f4549..50a711a 100644
+--- a/src/OBUTTCUS.cpp
++++ b/src/OBUTTCUS.cpp
+@@ -1,3 +1,4 @@
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -86,6 +87,7 @@ void ButtonCustom::create( int pX1, int pY1, int pX2, int pY2,
+ //
+ void ButtonCustom::paint(int defIsPushed, int repaintBody)
+ {
++ if(init_flag)siege_present_button(x1,y1,x2,y2,"Action",enable_flag,pushed_flag);
+ 	if( !init_flag )
+ 		return;
+ 
+diff --git a/src/OBUTTON.cpp b/src/OBUTTON.cpp
+index 87e7fcb..747c514 100644
+--- a/src/OBUTTON.cpp
++++ b/src/OBUTTON.cpp
+@@ -1,3 +1,4 @@
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -284,6 +285,7 @@ void Button::paint(int defIsPushed, int repaintBody)
+ 	if( !init_flag )
+ 		return;
+ 
++ siege_present_button(x1,y1,x2,y2,button_type==BUTTON_TEXT?str_buf:"Action",enable_flag,is_pushed);
+ 	int colorUp    = Vga::active_buf->color_up;
+ 	int colorLight = Vga::active_buf->color_light;
+ 
+diff --git a/src/OFONT.cpp b/src/OFONT.cpp
+index ffe3b44..85b6bc9 100644
+--- a/src/OFONT.cpp
++++ b/src/OFONT.cpp
+@@ -1,3 +1,4 @@
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -259,6 +260,7 @@ void Font::deinit()
+ //
+ int Font::put(int x,int y,const char* textPtr, char clearBack, int x2 )
+ {
++ siege_present_text(x,y,font_height,textPtr);
+ 	err_when( x<0 || y<0 );
+ 
+ 	if( !init_flag )
+@@ -1400,6 +1402,9 @@ void Font::center_put_to_buffer(char* dest, int destPitch, int x1, int y1, int x
+ //
+ void Font::put_paragraph_line(int x, int y, const char *textPtr, const char *textPtrEnd, char *flag_under_line)
+ {
++#ifdef __EMSCRIPTEN__
++ std::string webLine(textPtr,textPtrEnd);siege_present_text(x,y,font_height,webLine.c_str());
++#endif
+ 	FontInfo* fontInfo;
+ 	int       under_line_x1 = x;
+ 
+diff --git a/src/OGAMEND.cpp b/src/OGAMEND.cpp
+index ca84820..55508e2 100644
+--- a/src/OGAMEND.cpp
++++ b/src/OGAMEND.cpp
+@@ -1,3 +1,5 @@
++#include <web_siege_ui.h>
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -147,9 +149,16 @@ void Game::game_end(int winNationRecno, int playerDestroyed, int surrenderToNati
+ 			fileName = "LOSEGAME";
+ 
+ 		vga_util.disp_image_file(fileName);
++ siege_present_begin("ending",winFlag?1:2);
+ 
+ 		music.play(songId, sys.cdrom_drive ? MUSIC_CD_THEN_WAV : 0);
+-		mouse.wait_press(60);		// 60 seconds to time out
++		#ifdef __EMSCRIPTEN__
++ siege_present_end();siege_page_choice=-1;
++ while(siege_page_choice<0)emscripten_sleep(16);
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.closeEnding();});
++#else
++ mouse.wait_press(60);
++#endif		// 60 seconds to time out
+ 	}
+ 	else
+ 	{
+@@ -159,6 +168,7 @@ void Game::game_end(int winNationRecno, int playerDestroyed, int surrenderToNati
+ 	//------- display the statistic -------//
+ 
+ 	vga_util.disp_image_file("RESULTS");
++ siege_present_begin("ending",3);
+ 
+ 	if( winNationRecno )
+ 	{
+@@ -175,11 +185,18 @@ void Game::game_end(int winNationRecno, int playerDestroyed, int surrenderToNati
+ 
+ 	disp_stat();
+ 
+-	mouse.wait_press(60);		// 60 seconds to time out
++	#ifdef __EMSCRIPTEN__
++ siege_present_end();siege_page_choice=-1;
++ while(siege_page_choice<0)emscripten_sleep(16);
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.closeEnding();});
++#else
++ mouse.wait_press(60);
++#endif		// 60 seconds to time out
+ 
+ 	//-------- display ranking and score ----------//
+ 
+ 	vga_util.disp_image_file("RESULTS");
++ siege_present_begin("ending",3);
+ 
+ 	info.set_rank_data(0);		// count all nations, not only those that have contact with the player
+ 
+@@ -187,7 +204,13 @@ void Game::game_end(int winNationRecno, int playerDestroyed, int surrenderToNati
+ 
+ 	int totalScore = disp_score(winFlag);
+ 
+-	mouse.wait_press(60);		// 60 seconds to time out
++	#ifdef __EMSCRIPTEN__
++ siege_present_end();siege_page_choice=-1;
++ while(siege_page_choice<0)emscripten_sleep(16);
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.closeEnding();});
++#else
++ mouse.wait_press(60);
++#endif		// 60 seconds to time out
+ 
+ 	//--- if the player has managed to get into the hall of fame ---//
+ 
+diff --git a/src/OGAMHALL.cpp b/src/OGAMHALL.cpp
+index 716a95a..b781a10 100644
+--- a/src/OGAMHALL.cpp
++++ b/src/OGAMHALL.cpp
+@@ -1,3 +1,5 @@
++#include <web_siege_ui.h>
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -154,6 +156,7 @@ void HallOfFame::disp_hall_of_fame()
+ 	EM_ASM({ if(window.siegeHUD) window.siegeHUD.endScreen(true); });
+ 	#endif
+ 	vga_util.disp_image_file("HALLFAME");
++ siege_present_begin("ending",4);
+ 
+ 	//---------- display hall of fame records ------------//
+ 
+@@ -165,7 +168,13 @@ void HallOfFame::disp_hall_of_fame()
+ 		hall_fame_array[i].disp_info( x, y, i+1 );
+ 	}
+ 
+-	mouse.wait_press(60);		// 60 seconds to time out
++	#ifdef __EMSCRIPTEN__
++ siege_present_end();siege_page_choice=-1;
++ while(siege_page_choice<0)emscripten_sleep(16);
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.closeEnding();});
++#else
++ mouse.wait_press(60);
++#endif		// 60 seconds to time out
+ 
+ 	vga_util.finish_disp_image_file();
+ 	#ifdef __EMSCRIPTEN__
+diff --git a/src/OHELP.cpp b/src/OHELP.cpp
+index 98cb69a..5ca1ba1 100644
+--- a/src/OHELP.cpp
++++ b/src/OHELP.cpp
+@@ -1,3 +1,6 @@
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#endif
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -364,6 +367,10 @@ void Help::disp()
+ //
+ void Help::disp_help(int centerX, int centerY, const char* helpTitle, const char* helpDetail)
+ {
++#ifdef __EMSCRIPTEN__
++ if(config.help_mode != NO_HELP) EM_ASM({if(window.siegePresentation)window.siegePresentation.tooltip(UTF8ToString($0),UTF8ToString($1));},helpTitle,helpDetail&&config.help_mode==DETAIL_HELP?helpDetail:"");
++ return;
++#endif
+ 	if( config.help_mode == NO_HELP )
+ 		return;
+ 
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 667bdaf..4253183 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -1,3 +1,5 @@
++#include <OU_MARI.h>
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -461,6 +463,14 @@ static void publish_selected_object()
+ 				(unitPtr->target_loyalty>unitPtr->loyalty)-(unitPtr->target_loyalty<unitPtr->loyalty));
+ 			return;
+ 		}
++        if(unitPtr->mobile_type==UNIT_SEA) {
++         UnitMarine* ship=(UnitMarine*)unitPtr;
++         EM_ASM({if(window.siegeHUD){window.siegeHUD.object("Ship",UTF8ToString($0),"Health",$1+" / "+$2,"Passengers",$3,"Cargo",$4,$5,"unit:"+$6);window.siegeHUD.shipBegin($7);}},unitPtr->unit_name(),(int)unitPtr->hit_points,unitPtr->max_hit_points,ship->unit_count,ship->total_carried_goods(),unitPtr->is_own(),unit_array.selected_recno,ship->can_unload_unit());
++         for(int i=0;i<ship->unit_count;++i){Unit* crew=unit_array[ship->unit_recno_array[i]];
++          EM_ASM({window.siegeHUD.shipRow($0,UTF8ToString($1),UTF8ToString($2),$3,$4,$5);},i+1,crew->unit_name(),crew->skill.skill_id?crew->skill.skill_des():"Peasant",(int)crew->hit_points,crew->max_hit_points,crew->skill.combat_level);
++         }
++         EM_ASM({window.siegeHUD.shipEnd();});return;
++        }
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.object(
+ 			"Unit",UTF8ToString($0),"Health",$1+" / "+$2,"Loyalty",$3,
+ 			"Skill",$4,$5,"unit:"+$6); }, unitPtr->unit_name(),
+@@ -500,6 +510,16 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_town_command(int action, int value, int
+ 	info.disp();
+ }
+ 
++extern "C" EMSCRIPTEN_KEEPALIVE void web_ship_command(int action,int index) {
++ if(!unit_array.selected_recno)return;Unit* unit=unit_array[unit_array.selected_recno];
++ if(unit->mobile_type!=UNIT_SEA || !unit->is_own())return;
++ UnitMarine* ship=(UnitMarine*)unit;
++ if(action==1 && index>=1 && index<=ship->unit_count){ship->selected_unit_id=index;ship->menu_mode=0;}
++ if(action==2 && ship->can_unload_unit() && index>=1 && index<=ship->unit_count)ship->unload_unit(index,COMMAND_PLAYER);
++ if(action==3 && ship->can_unload_unit())ship->unload_all_units(COMMAND_PLAYER);
++ info.disp();
++}
++
+ extern "C" EMSCRIPTEN_KEEPALIVE void web_unit_command(int action, int value)
+ {
+ 	if( !unit_array.selected_recno )
+@@ -858,6 +878,7 @@ void Info::disp()
+ 	int saveUseBackBuf = vga.use_back_buf;
+ 
+ 	vga.use_front();
++ siege_present_begin("detail");
+ 
+ 	//------ if units/firm selected, display info --------//
+ 
+@@ -882,6 +903,7 @@ void Info::disp()
+ 		wall_res.disp_info(INFO_REPAINT);
+ 	}
+ 
++	siege_present_end();
+ 	//----- restore use back buffer if it was ----//
+ 
+ 	if( saveUseBackBuf )
+@@ -913,6 +935,7 @@ void Info::update()
+ 	int saveUseBackBuf = vga.use_back_buf;
+ 
+ 	vga.use_front();
++ siege_present_begin("detail",0,0);
+ 
+ 	//-------------------------------------------//
+ 
+@@ -937,6 +960,7 @@ void Info::update()
+ 		wall_res.disp_info(INFO_UPDATE);
+ 	}
+ 
++	siege_present_end();
+ 	//----- restore use back buffer if it was ----//
+ 
+ 	if( saveUseBackBuf )
+diff --git a/src/ONEWS.cpp b/src/ONEWS.cpp
+index f7d1f99..16c404f 100644
+--- a/src/ONEWS.cpp
++++ b/src/ONEWS.cpp
+@@ -279,10 +279,16 @@ int NewsArray::put(int detectAction)
+ 
+ 	if( !detectAction )
+ 	{
+-		image_icon.put_back(NEWS_X2+3, NEWS_Y2-12, "NEWS_LOG");	// news log report
++		#ifndef __EMSCRIPTEN__
++		image_icon.put_back(NEWS_X2+3, NEWS_Y2-12, "NEWS_LOG");
++#endif	// news log report
+ 
+ 		if( dispCount > 0 )			// clear news button
++			#ifndef __EMSCRIPTEN__
+ 			image_icon.put_back(NEWS_X2+3, NEWS_Y2-26, "NEWS_CLR");
++#else
++            (void)0;
++#endif
+ 	}
+ 
+ 	//------- detect buttons -------//
+diff --git a/src/OOPTMENU.cpp b/src/OOPTMENU.cpp
+index 665201e..845f9b5 100644
+--- a/src/OOPTMENU.cpp
++++ b/src/OOPTMENU.cpp
+@@ -129,6 +129,7 @@ void OptionMenu::enter(char untilExitFlag)
+  int result=siege_ui_wait();siege_settings_ptr=nullptr;
+  if(result==1) {
+   config.change_preference(temporary);
++  sys.user_pause_flag = config.frame_speed==0;
+   config.sound_effect_flag=config.sound_effect_volume>0;
+   audio.set_wav_volume(config.sound_effect_volume);
+   Config fileConfig;if(!fileConfig.load("CONFIG.DAT"))fileConfig.init();
+diff --git a/src/OR_TOWN.cpp b/src/OR_TOWN.cpp
+index 118d85a..28ea16e 100644
+--- a/src/OR_TOWN.cpp
++++ b/src/OR_TOWN.cpp
+@@ -1,3 +1,4 @@
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -378,7 +379,7 @@ static void put_town_rec(int recNo, int x, int y, int refreshFlag)
+ 	{
+ 		if( townPtr->race_pop_array[i] > 0 )
+ 		{
+-			vga_back.put_bitmap( x, y-2, race_res[i+1]->icon_bitmap_ptr );
++			vga_back.put_bitmap( x, y-2, race_res[i+1]->icon_bitmap_ptr );siege_present_text(x,y,12,race_res[i+1]->name);
+ 			x += iconSpacing;
+ 		}
+ 	}
+diff --git a/src/OR_TRADE.cpp b/src/OR_TRADE.cpp
+index d97f652..504e0d8 100644
+--- a/src/OR_TRADE.cpp
++++ b/src/OR_TRADE.cpp
+@@ -1,3 +1,4 @@
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -857,7 +858,7 @@ static void put_caravan_rec(int recNo, int x, int y, int refreshFlag)
+ 		if( unitPtr->raw_qty_array[i]==0 )
+ 			continue;
+ 
+-		bitmapPtr = raw_res.small_raw_icon(i+1);
++		bitmapPtr = raw_res.small_raw_icon(i+1);siege_present_text(x,y,12,raw_res[i+1]->name);
+ 		vga_back.put_bitmap( x, y, bitmapPtr );
+ 
+ 		font_san.disp( x+14, y-1, unitPtr->raw_qty_array[i], 1, x+45 );
+@@ -872,7 +873,7 @@ static void put_caravan_rec(int recNo, int x, int y, int refreshFlag)
+ 		if( unitPtr->product_raw_qty_array[i]==0 )
+ 			continue;
+ 
+-		bitmapPtr = raw_res.small_product_icon(i+1);
++		bitmapPtr = raw_res.small_product_icon(i+1);siege_present_text(x,y,12,raw_res.product_name(i+1));
+ 		vga_back.put_bitmap( x, y, bitmapPtr );
+ 
+ 		font_san.disp( x+14, y-1, unitPtr->product_raw_qty_array[i], 1, x+45 );
+@@ -925,11 +926,11 @@ static void put_firm_rec(int recNo, int x, int y, int refreshFlag)
+ 		{
+ 			if( marketGoods->raw_id )
+ 			{
+-				vga_back.put_bitmap(x, y, raw_res.small_raw_icon(marketGoods->raw_id));
++				vga_back.put_bitmap(x, y, raw_res.small_raw_icon(marketGoods->raw_id)); siege_present_text(x,y,12,raw_res[marketGoods->raw_id]->name);
+ 			}
+ 			else if( marketGoods->product_raw_id )
+ 			{
+-				vga_back.put_bitmap(x, y, raw_res.small_product_icon(marketGoods->product_raw_id));
++				vga_back.put_bitmap(x, y, raw_res.small_product_icon(marketGoods->product_raw_id)); siege_present_text(x,y,12,raw_res.product_name(marketGoods->product_raw_id));
+ 			}
+ 			else
+ 			{
+@@ -954,7 +955,7 @@ static void put_firm_rec(int recNo, int x, int y, int refreshFlag)
+ 	{
+ 		FirmFactory* firmPtr2 = firmPtr->cast_to_FirmFactory();
+ 
+-		vga_back.put_bitmap( x, y, raw_res.small_raw_icon(firmPtr2->product_raw_id) );
++		vga_back.put_bitmap( x, y, raw_res.small_raw_icon(firmPtr2->product_raw_id) ); siege_present_text(x,y,12,raw_res[firmPtr2->product_raw_id]->name);
+ 
+ 		x+=15;
+ 
+@@ -965,7 +966,7 @@ static void put_firm_rec(int recNo, int x, int y, int refreshFlag)
+ 
+ 		x+=110;
+ 
+-		vga_back.put_bitmap( x, y, raw_res.small_product_icon(firmPtr2->product_raw_id) );
++		vga_back.put_bitmap( x, y, raw_res.small_product_icon(firmPtr2->product_raw_id) ); siege_present_text(x,y,12,raw_res.product_name(firmPtr2->product_raw_id));
+ 
+ 		x+=15;
+ 
+@@ -979,7 +980,7 @@ static void put_firm_rec(int recNo, int x, int y, int refreshFlag)
+ 	{
+ 		FirmMine* firmPtr2 = firmPtr->cast_to_FirmMine();
+ 
+-		vga_back.put_bitmap( x, y, raw_res.small_raw_icon(firmPtr2->raw_id) );
++		vga_back.put_bitmap( x, y, raw_res.small_raw_icon(firmPtr2->raw_id) ); siege_present_text(x,y,12,raw_res[firmPtr2->raw_id]->name);
+ 
+ 		x+=15;
+ 
+@@ -990,7 +991,7 @@ static void put_firm_rec(int recNo, int x, int y, int refreshFlag)
+ 
+ 		x+=110;
+ 
+-		vga_back.put_bitmap( x, y, raw_res.small_raw_icon(firmPtr2->raw_id) );
++		vga_back.put_bitmap( x, y, raw_res.small_raw_icon(firmPtr2->raw_id) ); siege_present_text(x,y,12,raw_res[firmPtr2->raw_id]->name);
+ 
+ 		x+=15;
+ 
+@@ -1072,7 +1073,7 @@ static void put_ship_rec(int recNo, int x, int y, int refreshFlag)
+ 		if( unitPtr->raw_qty_array[i]==0 )
+ 			continue;
+ 
+-		bitmapPtr = raw_res.small_raw_icon(i+1);
++		bitmapPtr = raw_res.small_raw_icon(i+1);siege_present_text(x,y,12,raw_res[i+1]->name);
+ 		vga_back.put_bitmap( x, y, bitmapPtr );
+ 
+ 		font_san.disp( x+14, y-1, unitPtr->raw_qty_array[i], 1, x+45 );
+@@ -1087,7 +1088,7 @@ static void put_ship_rec(int recNo, int x, int y, int refreshFlag)
+ 		if( unitPtr->product_raw_qty_array[i]==0 )
+ 			continue;
+ 
+-		bitmapPtr = raw_res.small_product_icon(i+1);
++		bitmapPtr = raw_res.small_product_icon(i+1);siege_present_text(x,y,12,raw_res.product_name(i+1));
+ 		vga_back.put_bitmap( x, y, bitmapPtr );
+ 
+ 		font_san.disp( x+14, y-1, unitPtr->product_raw_qty_array[i], 1, x+45 );
+@@ -1124,11 +1125,11 @@ static void put_stop_info(int x, int y, TradeStop* tradeStop)
+ 	switch( pickUpType )
+ 	{
+ 		case AUTO_PICK_UP:
+-			vga_back.put_bitmap( x, y, image_icon.get_ptr("AUTOPICK") );
++			vga_back.put_bitmap( x, y, image_icon.get_ptr("AUTOPICK") );siege_present_text(x,y,12,"Auto");
+ 			break;
+ 
+ 		case NO_PICK_UP:
+-			vga_back.put_bitmap( x, y, image_icon.get_ptr("NOPICK") );
++			vga_back.put_bitmap( x, y, image_icon.get_ptr("NOPICK") );siege_present_text(x,y,12,"None");
+ 			break;
+ 
+ 		default:
+@@ -1136,7 +1137,7 @@ static void put_stop_info(int x, int y, TradeStop* tradeStop)
+ 			{
+ 				if( tradeStop->pick_up_array[i-1] )
+ 				{
+-					vga_back.put_bitmap( x, y, raw_res.small_raw_icon(i-PICK_UP_RAW_FIRST+1) );
++					vga_back.put_bitmap( x, y, raw_res.small_raw_icon(i-PICK_UP_RAW_FIRST+1) ); siege_present_text(x,y,12,raw_res[i-PICK_UP_RAW_FIRST+1]->name);
+ 					x+=10;
+ 
+ 					if( x+10 > x2 )
+@@ -1148,7 +1149,7 @@ static void put_stop_info(int x, int y, TradeStop* tradeStop)
+ 			{
+ 				if( tradeStop->pick_up_array[i-1] )
+ 				{
+-					vga_back.put_bitmap( x, y, raw_res.small_product_icon(i-PICK_UP_PRODUCT_FIRST+1) );
++					vga_back.put_bitmap( x, y, raw_res.small_product_icon(i-PICK_UP_PRODUCT_FIRST+1) ); siege_present_text(x,y,12,raw_res.product_name(i-PICK_UP_PRODUCT_FIRST+1));
+ 					x+=12;
+ 
+ 					if( x+10 > x2 )
+diff --git a/src/OSYS.cpp b/src/OSYS.cpp
+index 5bd1ee9..72c8398 100644
+--- a/src/OSYS.cpp
++++ b/src/OSYS.cpp
+@@ -2952,6 +2952,8 @@ void web_exit_fullscreen()
+ // 1 while the main menu is showing. The shell shows the "About & Support" link
+ // only on the menu (it overlaps the in-game news bar / version string).
+ //
++extern "C" EMSCRIPTEN_KEEPALIVE int web_game_speed() { return config.frame_speed; }
++extern "C" EMSCRIPTEN_KEEPALIVE void web_toggle_pause() { sys.set_speed(0); sys.user_pause_flag=config.frame_speed==0; }
+ extern "C" EMSCRIPTEN_KEEPALIVE int web_is_playing()
+ { return game.init_flag && (game.game_mode==GAME_SINGLE_PLAYER || game.game_mode==GAME_TUTORIAL || game.game_mode==GAME_CAMPAIGN); }
+ 
+diff --git a/src/OSYS2.cpp b/src/OSYS2.cpp
+index 27cefd9..c09a9aa 100644
+--- a/src/OSYS2.cpp
++++ b/src/OSYS2.cpp
+@@ -1,3 +1,4 @@
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -65,7 +66,14 @@
+ #ifdef __EMSCRIPTEN__
+ #include <emscripten.h>
+ static int siege_hud_pending=0;
+-extern "C" EMSCRIPTEN_KEEPALIVE void web_hud_action(int action) { if(action>=0 && action<=12)siege_hud_pending=action+1; }
++static int siege_click_x=0,siege_click_y=0,siege_click_frames=0;
++extern "C" EMSCRIPTEN_KEEPALIVE void web_present_click(int x,int y) {
++ siege_click_x=x;siege_click_y=y;siege_click_frames=6;
++ mouse.cur_x=x;mouse.cur_y=y;
++ mouse.add_event(LEFT_BUTTON);mouse.add_event(LEFT_BUTTON_RELEASE);
++ mouse.reset_boundary();
++}
++extern "C" EMSCRIPTEN_KEEPALIVE void web_hud_action(int action) { if(action>=0 && action<=13)siege_hud_pending=action+1; }
+ #endif
+ #include <CmdLine.h>
+ #include <gettext.h>
+@@ -93,6 +101,9 @@ void Sys::detect()
+ 	//--------------------------------------//
+ 
+ 	mouse.get_event();
++#ifdef __EMSCRIPTEN__
++ if(siege_click_frames>0){mouse.cur_x=siege_click_x;mouse.cur_y=siege_click_y;--siege_click_frames;}
++#endif
+ 
+ 	if( option_menu.is_active() )
+ 	{
+@@ -399,6 +410,7 @@ void Sys::detect_button()
+  if(siege_hud_pending) {
+   const int action=siege_hud_pending-1;siege_hud_pending=0;
+   if(action==9)in_game_menu.enter(!remote.is_enable());
++  else if(action==13)set_view_mode(MODE_NEWS_LOG);
+   else if(action>=10 && world.map_matrix)world.map_matrix->toggle_map_mode(action-10);
+   else if(action==0 || nation_array.player_recno || action==MODE_RANK)
+    set_view_mode(view_mode==action?MODE_NORMAL:action);
+@@ -628,6 +640,7 @@ void Sys::disp_view()
+  Vga::opaque_flag = config.opaque_report;
+ #endif
+ 
++		siege_present_begin("report",view_mode);
+ 		switch( view_mode )
+ 		{
+ 			case MODE_TRADE:
+@@ -671,6 +684,7 @@ void Sys::disp_view()
+ 				break;
+ 		}
+ 
++		siege_present_end();
+ 		vga.use_front();
+ 		Vga::opaque_flag = 0;
+ 
+@@ -757,6 +771,7 @@ void Sys::update_view()
+  Vga::opaque_flag = config.opaque_report;
+ #endif
+ 
++			siege_present_begin("report",view_mode);
+ 			switch( view_mode )
+ 			{
+ 				case MODE_TRADE:
+@@ -800,6 +815,7 @@ void Sys::update_view()
+ 					break;
+ 			}
+ 
++			siege_present_end();
+ 			if( in_game_menu.is_active() )
+ 			{
+ 				in_game_menu.disp();
+@@ -1030,7 +1046,9 @@ void Sys::disp_zoom()
+ 
+ 	//-------- display news messages ---------//
+ 
+-	news_array.disp();
++	siege_present_begin("news");
++ news_array.disp();
++ siege_present_end();
+ #ifdef __EMSCRIPTEN__
+  // Reports have an opaque reading surface; the live world still updates normally.
+  if(view_mode!=MODE_NORMAL)vga_back.bar(ZOOM_X1,ZOOM_Y1,ZOOM_X2,ZOOM_Y2,0x9d);
+diff --git a/src/OSaveGameArray.cpp b/src/OSaveGameArray.cpp
+index 86c02c8..8b9d7cf 100644
+--- a/src/OSaveGameArray.cpp
++++ b/src/OSaveGameArray.cpp
+@@ -207,7 +207,8 @@ int SaveGameArray::menu(int actionMode, int *recno)
+    SaveGame* entry=(*this)[i];
+    String detail("Overwrite file: ");detail+=entry->file_info.name;
+    detail+="\nGame date: ";detail+=date.date_str(entry->header.game_date,1);
+-   siege_ui_item(i+1,entry->header.player_name,detail);
++   String slotTitle(entry->header.player_name);slotTitle+=" - ";slotTitle+=entry->file_info.name;
++   siege_ui_item(i+1,slotTitle,detail);
+   }
+   int selected=siege_ui_wait();
+   if(selected<1 || selected>size()+1)return 0;
+@@ -220,7 +221,8 @@ int SaveGameArray::menu(int actionMode, int *recno)
+ 			SaveGame* entry=(*this)[i];
+ 			String detail("Save file: ");detail+=entry->file_info.name;
+ 			detail+="\nGame date: ";detail+=date.date_str(entry->header.game_date,1);
+-			siege_ui_item(i,entry->header.player_name,detail);
++			String slotTitle(entry->header.player_name);slotTitle+=" - ";slotTitle+=entry->file_info.name;
++			siege_ui_item(i,slotTitle,detail);
+ 		}
+ 		const int selected=siege_ui_wait();
+ 		if(selected<1 || selected>size())return 0;
+diff --git a/src/OVBROWSE.cpp b/src/OVBROWSE.cpp
+index d4c0fc6..c2e3a59 100644
+--- a/src/OVBROWSE.cpp
++++ b/src/OVBROWSE.cpp
+@@ -1,3 +1,4 @@
++#include <web_siege_present.h>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -553,6 +554,9 @@ int VBrowse::detect_right()
+ //
+ void VBrowse::disp_all()
+ {
++#ifdef __EMSCRIPTEN__
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.list($0,$1,$2,$3,$4,$5,$6);},x1,y1,x2,y2,rec_no,none_record?0:total_rec_num,disp_max_rec);
++#endif
+    int recNo;
+ 
+ 	Vga::active_buf->bar( ix1, iy1, ix2, iy2, VBROWSE_COLOR_BACK ); // clear background
+diff --git a/src/OVGA.cpp b/src/OVGA.cpp
+index 961a891..ec79b9a 100644
+--- a/src/OVGA.cpp
++++ b/src/OVGA.cpp
+@@ -116,7 +116,11 @@ int Vga::init()
+    if( config_adv.vga_full_screen )
+       set_window_grab(WINGRAB_ON);
+ 
++   #ifdef __EMSCRIPTEN__
++   renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
++#else
+    renderer = SDL_CreateRenderer(window, -1, 0);
++#endif
+    if( !renderer )
+       return 0;
+ 
+diff --git a/src/OVGABUF2.cpp b/src/OVGABUF2.cpp
+index 816a88d..9e3d150 100644
+--- a/src/OVGABUF2.cpp
++++ b/src/OVGABUF2.cpp
+@@ -1,3 +1,5 @@
++#include <web_siege_present.h>
++#include <cstdio>
+ /*
+  * Seven Kingdoms: Ancient Adversaries
+  *
+@@ -234,6 +236,10 @@ void VgaBuf::separator(int x1, int y1, int x2, int y2)
+ void VgaBuf::indicator(int x1, int y1, int x2, int y2, float curValue,
+ 		    float maxValue, int indiColor, int backColor)
+ {
++#ifdef __EMSCRIPTEN__
++ char percent[24];std::snprintf(percent,sizeof(percent),"%.0f%%",maxValue>0?curValue/maxValue*100:0);
++ siege_present_text(x1,y1,12,percent);
++#endif
+    if( backColor == -1 )
+       backColor = color_down;
+ 
+-- 
+2.39.5 (Apple Git-154)
+

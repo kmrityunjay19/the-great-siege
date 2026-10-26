@@ -1,7 +1,7 @@
 From f7658255e3b1f613596065188cfc7401e553ff5c Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sat, 17 Oct 2026 22:34:59 +0100
-Subject: [PATCH 19/27] fix: compact worker panel bridge
+Subject: [PATCH 19/30] fix: compact worker panel bridge
 
 ---
  src/OINFO.cpp | 33 ++++++++++++++-------------------

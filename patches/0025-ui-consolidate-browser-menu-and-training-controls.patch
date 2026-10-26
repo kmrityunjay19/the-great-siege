@@ -1,7 +1,7 @@
 From 5dbafeaaaf0e3c244bb6ed65b3c7018649c2dfba Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sun, 18 Oct 2026 13:14:37 +0100
-Subject: [PATCH 25/27] ui: consolidate browser menu and training controls
+Subject: [PATCH 25/30] ui: consolidate browser menu and training controls
 
 ---
  src/OINGMENU.cpp | 23 ++++++++++++++++++++++-

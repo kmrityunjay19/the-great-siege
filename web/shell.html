@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The Great Siege</title>
   <style>
     html, body { margin: 0; height: 100%; background: #000; color: #cbb88a;
@@ -142,8 +142,11 @@
       <p id="musiccredit">Original artwork and sound effects remain part of the GPL game data. The separately licensed original soundtrack is not included in this renamed edition. This edition is not endorsed by Enlight Software.</p>
     </div>
   </div>
-  <script src="siege-pages.js?v=20261019-2"></script>
-  <script src="siege-hud.js?v=20261019-2"></script>
+  <script src="siege-pages.js?v=20261026-2"></script>
+  <script src="siege-hud.js?v=20261026-2"></script>
+  <link rel="stylesheet" href="siege-modern.css?v=20261026-2">
+  <script src="siege-core.js?v=20261026-2"></script>
+  <script src="siege-presentation.js?v=20261026-2"></script>
   <script>
     var siegeRuntimeReady = false;
     var statusEl = document.getElementById('status');
@@ -152,7 +155,7 @@
     var Module = {
       // Version runtime assets so a normal refresh loads one coherent build.
       locateFile: function (path) {
-        return path + (path.indexOf('?') < 0 ? '?v=20261019-2' : '&v=20261019-2');
+        return path + (path.indexOf('?') < 0 ? '?v=20261026-2' : '&v=20261026-2');
       },
       canvas: (function () {
         var c = document.getElementById('canvas');
@@ -214,7 +217,7 @@
         if (creditsEl) creditsEl.style.display = 'none';
         document.body.classList.add('ready');   // activate the mobile touch overlay (game is now interactive)
         var s = document.createElement('script');
-        s.src = 'extras.js?v=20261019-2';
+        s.src = 'extras.js?v=20261026-2';
         s.onerror = function () { console.warn('extras package failed to load'); };
         document.body.appendChild(s);
         // The engine detected its data dirs at boot, BEFORE extras.data mounted, so
@@ -340,21 +343,9 @@
       function isRot() { return document.body.classList.contains('rot90'); }
       function clamp(v, hi) { return v < 0 ? 0 : (v > hi ? hi : v); }
       function mapPoint(px, py) {
-        var VW = window.innerWidth, VH = window.innerHeight, ew, eh, ex, ey;
-        if (isRot()) {
-          // Canvas box is VH wide x VW tall, rotated 90° clockwise about centre.
-          // Inverting that CSS transform: ex = py, ey = VW - px.
-          ew = VH; eh = VW; ex = py; ey = VW - px;
-        } else {
-          ew = VW; eh = VH; ex = px; ey = py;
-        }
-        // object-fit:contain — fit 800x600 into ew x eh, centred (offsets = black bars).
-        // Match the independently scaled full-viewport canvas.
-        return {
-          lx: clamp(ex * VGA_W / ew, MAX_X),
-          ly: clamp(ey * VGA_H / eh, MAX_Y),
-          nx: ew ? ex / ew : 0, ny: eh ? ey / eh : 0
-        };
+        var r = Module.canvas.getBoundingClientRect();
+        var point = SiegeCore.point(px,py,r);
+        return {lx:point.lx,ly:point.ly,nx:point.lx/800,ny:point.ly/600};
       }
 
       // gesture state machine
@@ -423,7 +414,7 @@
         return window.innerHeight > window.innerWidth;
       }
       function recomputeRotation() {
-        var rot = rotMode === 'on' || (rotMode === 'auto' && devicePortrait());
+        var rot = false; // Responsive browser interface stays upright in every orientation.
         document.body.classList.toggle('rot90', rot);
       }
       function setupRotation() {

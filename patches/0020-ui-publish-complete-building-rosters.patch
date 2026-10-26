@@ -1,7 +1,7 @@
 From 57b217c638686bb361c2a30ab059b4fd7ad3ee75 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sat, 17 Oct 2026 23:05:17 +0100
-Subject: [PATCH 20/27] ui: publish complete building rosters
+Subject: [PATCH 20/30] ui: publish complete building rosters
 
 ---
  src/OINFO.cpp | 107 ++++++++++++++++++++++++++++++++++++++++++++++++++

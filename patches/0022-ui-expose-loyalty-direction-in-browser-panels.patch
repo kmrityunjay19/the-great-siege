@@ -1,7 +1,7 @@
 From 7dbe00bc4acfee9b3d95bea81b0fdbcc27ca2c6e Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sun, 18 Oct 2026 12:15:23 +0100
-Subject: [PATCH 22/27] ui: expose loyalty direction in browser panels
+Subject: [PATCH 22/30] ui: expose loyalty direction in browser panels
 
 ---
  src/OINFO.cpp | 28 ++++++++++++++++++----------

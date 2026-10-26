@@ -1,7 +1,7 @@
 From e2cc259bee438a019e897da4c9f1458e49762325 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sun, 18 Oct 2026 14:46:08 +0100
-Subject: [PATCH] ui: modernize building rosters and end screens
+Subject: [PATCH 28/30] ui: modernize building rosters and end screens
 
 ---
  src/OGAMEND.cpp  | 11 +++++++++++
