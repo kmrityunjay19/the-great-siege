@@ -55,13 +55,3 @@ body:not(.siege-playing) #siege-canvas-veil{display:block}
 #siege-report .record-row.section-start{margin-top:12px;border-top:1px solid #3b5550;background:inherit}
 #siege-report button.record-cell.kingdom-name{border-left:4px solid var(--kingdom-color);padding-left:12px;font-weight:700}
 #siege-report button.record-cell.kingdom-name:before{content:'';display:inline-block;width:8px;height:8px;margin:0 8px 1px 0;border-radius:50%;background:var(--kingdom-color);box-shadow:0 0 0 2px #102125}
-
-/* Clear report hierarchy: data rows stay flat; only the report title and table controls carry emphasis. */
-#siege-report .record-row,
-#siege-report .record-row:nth-child(even),
-#siege-report .record-row.section-start{height:46px;margin-top:0;border-top:0;border-bottom:1px solid #29464a;background:#172d32!important}
-#siege-report .record-row.section-start{margin-top:14px;border-top:1px solid #3c5b58}
-#siege-report button.record-cell{color:#d7e0d9;padding:9px 10px}
-#siege-report button.record-cell:hover{background:#263f40;color:#f3d59a}
-#siege-report button.record-cell.kingdom-name{border-left:5px solid var(--kingdom-color);padding-left:14px;color:#f0e4c9;font-weight:700}
-#siege-report button.record-cell.kingdom-name:before{width:7px;height:7px;margin-right:9px;box-shadow:none}
