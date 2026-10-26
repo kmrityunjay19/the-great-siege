@@ -50,8 +50,3 @@ body:has(#siege-pages:not([hidden])) #siege-hud,body:has(#siege-pages:not([hidde
 #siege-canvas-veil{position:fixed;left:0;right:0;top:0;height:var(--hud-height);z-index:5;background:#14272b;pointer-events:none}
 #siege-canvas-veil[hidden]{display:none!important}
 body:not(.siege-playing) #siege-canvas-veil{display:block}
-
-/* Report rows are data records; section spacing must not make ordinary villages look like headers. */
-#siege-report .record-row.section-start{margin-top:12px;border-top:1px solid #3b5550;background:inherit}
-#siege-report button.record-cell.kingdom-name{border-left:4px solid var(--kingdom-color);padding-left:12px;font-weight:700}
-#siege-report button.record-cell.kingdom-name:before{content:'';display:inline-block;width:8px;height:8px;margin:0 8px 1px 0;border-radius:50%;background:var(--kingdom-color);box-shadow:0 0 0 2px #102125}
