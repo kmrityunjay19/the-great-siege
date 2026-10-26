@@ -29,10 +29,11 @@ function renderReport(snapshot){
  const signature=JSON.stringify([snapshot.mode,texts,snapshot.buttons,snapshot.lists]);if(cache.report===signature)return;cache.report=signature;
  const previousFocus=document.activeElement?.dataset?.recordKey;
  const frag=document.createDocumentFragment();let previousY=0;
- for(const row of rowsFrom(texts)){
+ const kingdomColors=['#c95b51','#d49a43','#5aa6a0','#7e82d8','#b56db4','#76a85a','#d0c15b','#6c9bd2'];
+ for(const [rowIndex,row] of rowsFrom(texts).entries()){
   const line=el('div','',frag);line.className='record-row';if(row.y-previousY>25)line.classList.add('section-start');previousY=row.y;
   const cells=row.items.sort((a,b)=>a.x-b.x);
-  cells.forEach((t,i)=>{const b=el('button',t.text,line);b.className='record-cell';b.dataset.recordKey=t.x+':'+t.y;b.style.left=(Math.max(0,t.x-6)/566*100)+'%';const next=cells[i+1]?.x||568;b.style.width=(Math.max(28,next-t.x-4)/566*100)+'%';b.title=t.text;b.onclick=()=>clickAt(t.x+3,t.y+2);b.ondblclick=()=>{setTimeout(()=>clickAt(t.x+3,t.y+2),90);if([2,4,5,6,7].includes(snapshot.mode))setTimeout(()=>call('web_hud_action',['number'],[0]),200);};});
+  cells.forEach((t,i)=>{const b=el('button',t.text,line);b.className='record-cell';if(snapshot.mode===1&&i===0){b.classList.add('kingdom-name');b.style.setProperty('--kingdom-color',kingdomColors[rowIndex%kingdomColors.length]);}b.dataset.recordKey=t.x+':'+t.y;b.style.left=(Math.max(0,t.x-6)/566*100)+'%';const next=cells[i+1]?.x||568;b.style.width=(Math.max(28,next-t.x-4)/566*100)+'%';b.title=t.text;b.onclick=()=>clickAt(t.x+3,t.y+2);b.ondblclick=()=>{setTimeout(()=>clickAt(t.x+3,t.y+2),90);if([2,4,5,6,7].includes(snapshot.mode))setTimeout(()=>call('web_hud_action',['number'],[0]),200);};});
  }
  if(!texts.length)el('p','No records to display for this kingdom.',frag).className='empty-state';
  const toolbar=el('div','',frag);toolbar.className='native-actions';
