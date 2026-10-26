@@ -1,0 +1,34 @@
+From 4eb81486975cec687cd007fbf5092b8d7b83ae7a Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Mon, 26 Oct 2026 16:24:45 +0000
+Subject: [PATCH 32/32] Expose mobilization for any resting builder
+
+---
+ src/OINFO.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 4b43226..79003de 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -334,7 +334,7 @@ static void publish_selected_object()
+ 			label1, value1, label2, value2, label3, value3, actionCode,
+ 			firmPtr->own_firm(), firmPtr->under_construction, firmPtr->firm_recno);
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingBuilder($0,$1); },
+-			firmPtr->own_firm() && firmPtr->under_construction && firmPtr->builder_recno,
++			firmPtr->own_firm() && firmPtr->builder_recno,
+ 			firmPtr->builder_recno!=0);
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterMode(UTF8ToString($0)); }, actionCode);
+ 		if( firmPtr->firm_id!=FIRM_MARKET && firmPtr->firm_id!=FIRM_INN )
+@@ -584,7 +584,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_building_command(int action)
+ 	if( !firm_array.selected_recno || action!=1 )
+ 		return;
+ 	Firm* firmPtr=firm_array[firm_array.selected_recno];
+-	if( !firmPtr->own_firm() || !firmPtr->under_construction || !firmPtr->builder_recno )
++	if( !firmPtr->own_firm() || !firmPtr->builder_recno )
+ 		return;
+ 	firmPtr->mobilize_builder(firmPtr->builder_recno);
+ 	info.disp();
+-- 
+2.39.5 (Apple Git-154)
+

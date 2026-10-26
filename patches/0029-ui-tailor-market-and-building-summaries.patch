@@ -1,7 +1,7 @@
 From a226814dc3c81c05796d2da717a96cf9af2bcb39 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Mon, 19 Oct 2026 16:04:23 +0100
-Subject: [PATCH 29/31] ui: tailor market and building summaries
+Subject: [PATCH 29/32] ui: tailor market and building summaries
 
 ---
  src/OINFO.cpp | 59 +++++++++++++++++++++++++++++++++++++++++++++------

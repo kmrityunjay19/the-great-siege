@@ -1,7 +1,7 @@
 From d2785213cb85a6b88f9ff278f7bde2e217934f6b Mon Sep 17 00:00:00 2001
 From: Red Locomotive <67845085+redLocomotive@users.noreply.github.com>
 Date: Tue, 9 Jun 2026 10:32:06 +0100
-Subject: [PATCH 03/31] multiplayer: WebSocket transport (wasm-to-wasm) over
+Subject: [PATCH 03/32] multiplayer: WebSocket transport (wasm-to-wasm) over
  the enet MultiPlayer API
 
 Browsers have no UDP, so reimplement the MultiPlayer API over emscripten/websocket.h (src/ws/multiplayer.cpp), gated by configure --enable-websocket (USE_WS_MP). mp_address.h makes ENetAddress an 8-byte POD that serialises identically across wasm clients. OGAMEMP/OGAME: fix service-button selection (painted but never detected) + pass service_mode by reference.
