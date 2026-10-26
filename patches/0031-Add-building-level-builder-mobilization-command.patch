@@ -1,7 +1,7 @@
 From 157fd69053114fe2051a15aebf4f1ab1e5bfc6a8 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Mon, 26 Oct 2026 16:12:47 +0000
-Subject: [PATCH 31/32] Add building-level builder mobilization command
+Subject: [PATCH 31/33] Add building-level builder mobilization command
 
 ---
  src/OINFO.cpp | 17 +++++++++++++++++

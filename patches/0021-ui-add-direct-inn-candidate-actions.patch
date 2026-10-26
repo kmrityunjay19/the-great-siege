@@ -1,7 +1,7 @@
 From 3e21a83d59e0dd1117c9d0a6f40ea75ea6701bd6 Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sat, 17 Oct 2026 23:15:38 +0100
-Subject: [PATCH 21/32] ui: add direct inn candidate actions
+Subject: [PATCH 21/33] ui: add direct inn candidate actions
 
 ---
  src/OINFO.cpp | 23 +++++++++++++++++++++--

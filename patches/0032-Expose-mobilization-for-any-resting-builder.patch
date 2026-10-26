@@ -1,7 +1,7 @@
 From 4eb81486975cec687cd007fbf5092b8d7b83ae7a Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Mon, 26 Oct 2026 16:24:45 +0000
-Subject: [PATCH 32/32] Expose mobilization for any resting builder
+Subject: [PATCH 32/33] Expose mobilization for any resting builder
 
 ---
  src/OINFO.cpp | 4 ++--

@@ -1,0 +1,64 @@
+From d2a5be6a83e69ad78d2c2295ef174d07a1f9fac0 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Mon, 26 Oct 2026 17:50:39 +0000
+Subject: [PATCH 33/33] Add individual worker ejection and building sale bridge
+
+---
+ src/OINFO.cpp | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 79003de..197739c 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -166,11 +166,11 @@ static void publish_selected_object()
+ 				int workerLoyalty=workerPtr->loyalty();
+ 				int workerTargetLoyalty=workerPtr->target_loyalty(firmPtr->firm_recno);
+ 				EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterRow(
+-					UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),$3,$4,$5,$6,$7,$8,$9); },
++					UTF8ToString($0),UTF8ToString($1),UTF8ToString($2),$3,$4,$5,$6,$7,$8,$9,$10); },
+ 					workerRole,workerName,workerSkill,workerPtr->skill_level,
+ 					workerPtr->combat_level,workerPtr->hit_points,workerPtr->max_hit_points(),
+ 					workerLoyalty,workerPtr->spy_recno ? 3 : 0,
+-					(workerTargetLoyalty>workerLoyalty)-(workerTargetLoyalty<workerLoyalty));
++					(workerTargetLoyalty>workerLoyalty)-(workerTargetLoyalty<workerLoyalty),i+1);
+ 			 }
+ 			}
+ 			if( firmPtr->firm_id==FIRM_INN )
+@@ -336,6 +336,8 @@ static void publish_selected_object()
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingBuilder($0,$1); },
+ 			firmPtr->own_firm() && firmPtr->builder_recno,
+ 			firmPtr->builder_recno!=0);
++		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingSale($0); },
++			firmPtr->own_firm() && !firmPtr->under_construction && firmPtr->can_sell());
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterMode(UTF8ToString($0)); }, actionCode);
+ 		if( firmPtr->firm_id!=FIRM_MARKET && firmPtr->firm_id!=FIRM_INN )
+ 			EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingCapacity($0,$1); },
+@@ -572,6 +574,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_building_item_action(int action, int va
+ 		if( value>=1 && value<=innPtr->inn_unit_count )
+ 			innPtr->hire(value);
+ 	}
++	else if( action==2 && value>=1 && value<=firmPtr->worker_count )
++		firmPtr->mobilize_worker(value,COMMAND_PLAYER);
+ 
+ 	info.disp();
+ }
+@@ -590,6 +594,15 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_building_command(int action)
+ 	info.disp();
+ }
+ 
++extern "C" EMSCRIPTEN_KEEPALIVE void web_building_sell()
++{
++	if( !firm_array.selected_recno ) return;
++	Firm* firmPtr=firm_array[firm_array.selected_recno];
++	if( firmPtr->own_firm() && !firmPtr->under_construction && firmPtr->can_sell() )
++		firmPtr->sell_firm(COMMAND_PLAYER);
++	info.disp();
++}
++
+ extern "C" EMSCRIPTEN_KEEPALIVE void web_building_choice(int action, int value)
+ {
+ 	if( !firm_array.selected_recno )
+-- 
+2.39.5 (Apple Git-154)
+

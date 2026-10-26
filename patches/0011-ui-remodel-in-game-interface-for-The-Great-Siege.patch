@@ -1,7 +1,7 @@
 From eaf28cec8122ec3dbb80a069850f9ce645f6e013 Mon Sep 17 00:00:00 2001
 From: Local Build <local-build@localhost>
 Date: Sat, 17 Oct 2026 21:21:26 +0100
-Subject: [PATCH 11/32] ui: remodel in-game interface for The Great Siege
+Subject: [PATCH 11/33] ui: remodel in-game interface for The Great Siege
 
 ---
  include/web_siege_ui.h |  2 ++
