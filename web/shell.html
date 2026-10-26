@@ -136,10 +136,11 @@
     <div id="aboutpanel">
       <button id="aboutclose" type="button" aria-label="Close">×</button>
       <h2>The Great Siege</h2>
-      <p>A renamed browser edition derived from Seven Kingdoms: Ancient Adversaries. Original game copyright 1997–1998 Trevor Chan &amp; Enlight Software Ltd.; maintained by the <a href="https://7kfans.com" target="_blank" rel="noopener">7kfans community</a>. Browser port by redLocomotive; local remodeling and build integration added for this edition.</p>
-      <p>This is free software under the GNU GPL, version 2 or later, and comes with ABSOLUTELY NO WARRANTY. You may modify and redistribute it under the license terms.</p>
-      <p><a href="source-code.tar.gz">Corresponding source &amp; build instructions</a> · <a href="COPYING.txt">GNU GPL and copyright notices</a></p>
-      <p id="musiccredit">Original artwork and sound effects remain part of the GPL game data. The separately licensed original soundtrack is not included in this renamed edition. This edition is not endorsed by Enlight Software.</p>
+      <p><strong>Lead developer</strong><br>Mrityunjay Kumar</p>
+      <p><strong>Engine &amp; open-source acknowledgment</strong><br>The Great Siege is an independent web strategy game powered by a modified engine derived from <em>Seven Kingdoms: Ancient Adversaries</em>, originally created by Trevor Chan / Enlight Software.</p>
+      <p><strong>License</strong><br>Published under the <a href="COPYING.txt">GNU General Public License (GPLv2)</a>. Source code and build instructions are available in the <a href="source-code.tar.gz">source archive</a> · <a href="https://github.com/your-account/the-great-siege" target="_blank" rel="noopener">public GitHub repository</a>.</p>
+      <p id="musiccredit"><strong>Assets &amp; audio</strong><br>Custom visual and audio credits will be listed here as commissioned assets are added. Original GPL artwork and sound effects remain credited to the upstream project; the separately licensed original soundtrack is not included.</p>
+      <p><button id="aboutback" type="button">Back to Main Menu</button></p>
     </div>
   </div>
   <script src="siege-pages.js?v=20261026-2"></script>
@@ -303,6 +304,7 @@
       var btn = document.getElementById('aboutbtn');
       var modal = document.getElementById('aboutmodal');
       var closeBtn = document.getElementById('aboutclose');
+      var backBtn = document.getElementById('aboutback');
       if (!btn || !modal) return;
       var open = function () { modal.classList.add('open'); };
       var close = function () {
@@ -311,6 +313,7 @@
       };
       btn.addEventListener('click', open);
       if (closeBtn) closeBtn.addEventListener('click', close);
+      if (backBtn) backBtn.addEventListener('click', close);
       modal.addEventListener('click', function (e) { if (e.target === modal) close(); });  // backdrop
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && modal.classList.contains('open')) {

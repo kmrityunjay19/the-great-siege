@@ -1,0 +1,47 @@
+From 157fd69053114fe2051a15aebf4f1ab1e5bfc6a8 Mon Sep 17 00:00:00 2001
+From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
+Date: Mon, 26 Oct 2026 16:12:47 +0000
+Subject: [PATCH 31/31] Add building-level builder mobilization command
+
+---
+ src/OINFO.cpp | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/src/OINFO.cpp b/src/OINFO.cpp
+index 4253183..4b43226 100644
+--- a/src/OINFO.cpp
++++ b/src/OINFO.cpp
+@@ -333,6 +333,9 @@ static void publish_selected_object()
+ 			kind, firmPtr->firm_name(), (int)firmPtr->hit_points, (int)firmPtr->max_hit_points,
+ 			label1, value1, label2, value2, label3, value3, actionCode,
+ 			firmPtr->own_firm(), firmPtr->under_construction, firmPtr->firm_recno);
++		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingBuilder($0,$1); },
++			firmPtr->own_firm() && firmPtr->under_construction && firmPtr->builder_recno,
++			firmPtr->builder_recno!=0);
+ 		EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingRosterMode(UTF8ToString($0)); }, actionCode);
+ 		if( firmPtr->firm_id!=FIRM_MARKET && firmPtr->firm_id!=FIRM_INN )
+ 			EM_ASM({ if(window.siegeHUD) window.siegeHUD.buildingCapacity($0,$1); },
+@@ -573,6 +576,20 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_building_item_action(int action, int va
+ 	info.disp();
+ }
+ 
++// Building-level construction control. Builders are stored separately from
++// the normal worker roster while a firm is under construction, so the action
++// must go through Firm::mobilize_builder() to restore the unit to the map.
++extern "C" EMSCRIPTEN_KEEPALIVE void web_building_command(int action)
++{
++	if( !firm_array.selected_recno || action!=1 )
++		return;
++	Firm* firmPtr=firm_array[firm_array.selected_recno];
++	if( !firmPtr->own_firm() || !firmPtr->under_construction || !firmPtr->builder_recno )
++		return;
++	firmPtr->mobilize_builder(firmPtr->builder_recno);
++	info.disp();
++}
++
+ extern "C" EMSCRIPTEN_KEEPALIVE void web_building_choice(int action, int value)
+ {
+ 	if( !firm_array.selected_recno )
+-- 
+2.39.5 (Apple Git-154)
+

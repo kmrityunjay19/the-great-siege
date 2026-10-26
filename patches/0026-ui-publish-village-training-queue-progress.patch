@@ -1,7 +1,7 @@
 From 024af75b2dfa5e0a8d9e1ed7be2c13d1f78726af Mon Sep 17 00:00:00 2001
 From: Mrityunjay Kumar <mrityunjaykumar@mrityunjays-air.home>
 Date: Sun, 18 Oct 2026 13:28:47 +0100
-Subject: [PATCH 26/30] ui: publish village training queue progress
+Subject: [PATCH 26/31] ui: publish village training queue progress
 
 ---
  src/OINFO.cpp | 16 ++++++++++++++++

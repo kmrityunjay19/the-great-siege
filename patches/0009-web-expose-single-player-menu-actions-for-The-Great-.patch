@@ -1,7 +1,7 @@
 From 752a5879c6347c7e64b3c3d4ece9011585be4d39 Mon Sep 17 00:00:00 2001
 From: Local Build <local-build@localhost>
 Date: Sat, 17 Oct 2026 20:10:56 +0100
-Subject: [PATCH 09/30] web: expose single-player menu actions for The Great
+Subject: [PATCH 09/31] web: expose single-player menu actions for The Great
  Siege shell
 
 ---
