@@ -60,3 +60,14 @@ body:not(.siege-playing) #siege-canvas-veil{display:block}
 #siege-report button.record-cell:hover{background:#263f40;color:#f0d39a}
 #siege-report .record-row:first-child button.record-cell,
 #siege-report .record-row:nth-child(2) button.record-cell{font-weight:650;color:#cbd5ce;letter-spacing:.01em}
+
+/* Kingdom Council data grid */
+#siege-report .record-row,
+#siege-report .record-row:nth-child(even),
+#siege-report .record-row.section-start{height:44px;margin-top:0;border-top:0;border-left:0;background:#172d32!important}
+#siege-report .record-row.section-start{margin-top:14px;border-top:1px solid #385451}
+#siege-report button.record-cell{white-space:nowrap;border:0!important;border-radius:0;color:#d5dfd8;font-weight:500}
+#siege-report button.record-cell:hover{background:#263f40;color:#f2d39b}
+#siege-report .report-tabs{display:flex;gap:2px;align-items:stretch;margin-top:14px;border-bottom:1px solid #405b57;background:#172d32}
+#siege-report .report-tab{min-height:44px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:#bdc9c1;padding:10px 22px;font-weight:650;white-space:nowrap}
+#siege-report .report-tab:first-child,#siege-report .report-tab:hover{color:#f0d59f;border-bottom-color:#c5a36b;background:#20383a}

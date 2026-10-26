@@ -30,6 +30,9 @@ function renderReport(snapshot){
  const previousFocus=document.activeElement?.dataset?.recordKey;
  const frag=document.createDocumentFragment();let previousY=0;
  for(const row of rowsFrom(texts)){
+  const tabLabels=['Information','Diplomacy','Diplomatic Log'];
+  const tabCells=row.items.filter(item=>tabLabels.includes(item.text));
+  if(tabCells.length>=2){const tabs=el('nav','',frag);tabs.className='report-tabs';tabs.setAttribute('aria-label','Kingdom Council sections');tabCells.forEach(item=>{const tab=el('button',item.text,tabs);tab.className='report-tab';tab.onclick=()=>clickAt(item.x+3,item.y+2);});continue;}
   const line=el('div','',frag);line.className='record-row';if(row.y-previousY>25)line.classList.add('section-start');previousY=row.y;
   const cells=row.items.sort((a,b)=>a.x-b.x);
   cells.forEach((t,i)=>{const b=el('button',t.text,line);b.className='record-cell';b.dataset.recordKey=t.x+':'+t.y;b.style.left=(Math.max(0,t.x-6)/566*100)+'%';const next=cells[i+1]?.x||568;b.style.width=(Math.max(28,next-t.x-4)/566*100)+'%';b.title=t.text;b.onclick=()=>clickAt(t.x+3,t.y+2);b.ondblclick=()=>{setTimeout(()=>clickAt(t.x+3,t.y+2),90);if([2,4,5,6,7].includes(snapshot.mode))setTimeout(()=>call('web_hud_action',['number'],[0]),200);};});
