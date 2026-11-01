@@ -1,0 +1,52 @@
+/*
+ * siege-modern.css — modern UI polish for The Great Siege
+ *
+ * Supplemental stylesheet loaded after index.html's inline <style> block.
+ * Provides progressive-enhancement tweaks and ensures a smooth transition
+ * from the HTML menu into the canvas game.
+ */
+
+/* ── Canvas transition ──────────────────────────────────────────── */
+
+canvas {
+  transition: opacity 0.25s ease;
+}
+
+body:not(.ready) canvas {
+  opacity: 0;
+}
+
+/* ── Smooth menu exit ───────────────────────────────────────────── */
+
+#siege-menu {
+  transition: opacity 0.2s ease;
+}
+
+#siege-menu[hidden] {
+  /* [hidden] sets display:none; add a fade-out before that via JS if desired */
+  display: none !important;
+}
+
+/* ── Loading bar refinement ─────────────────────────────────────── */
+
+#bar > div {
+  transition: width 0.15s linear;
+}
+
+/* ── Button active feedback ─────────────────────────────────────── */
+
+.siege-action:active:not(:disabled) {
+  transform: translateX(5px);
+  opacity: 0.85;
+}
+
+/* ── Accessibility: respect reduced-motion preference ───────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  canvas,
+  #siege-menu,
+  #bar > div,
+  .siege-action {
+    transition: none !important;
+  }
+}
