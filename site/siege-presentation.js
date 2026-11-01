@@ -7,7 +7,7 @@ const clean=SiegeCore.clean;
 const call=(name,types=[],args=[])=>Module.ccall(name,null,types,args);
 const titles=['World','Kingdoms','Villages','Economy','Trade','Military','Research','Espionage','Ranking','Kingdom activity'];
  // Per-report guidance: each page explains what its rows are and the one action worth taking.
- const HELP={1:'Diplomacy, relations and intelligence. Select a kingdom row to inspect it and open its diplomacy options; double-click a location to centre the map on it. Use a column heading to sort.',2:'Population, loyalty and structures. Select a village to centre the map and open its management panel. Use a column heading to sort.',3:'Yearly income and expenses. Select a line to see what drives your treasury. Use a column heading to sort.',4:'Caravans, ships and routes. A caravan needs a market and a destination settlement. Use a column heading to sort.',5:'Commanders, troops and units. Select one to inspect it; double-click to centre the map on it. Use a column heading to sort.',6:'Technology and discoveries. Research grows once a Tower of science is built and staffed. Use a column heading to sort.',7:'Agents, cover and assignments. Select an agent to review its location and task. Use a column heading to sort.',8:'Kingdom standings and victory progress. Compare score, population and territory. Use a column heading to sort.'};
+ const HELP={1:'Diplomacy, relations and intelligence. Select a kingdom row, then use the Diplomacy tab to send trade treaties and other requests. Use a column heading to sort.',2:'Population, loyalty and structures. Select a village to centre the map and open its management panel. Use a column heading to sort.',3:'Yearly income and expenses. Select a line to see what drives your treasury. Use a column heading to sort.',4:'Caravans, ships and routes. A caravan needs a market and a destination settlement. Use a column heading to sort.',5:'Commanders, troops and units. Select one to inspect it; double-click to centre the map on it. Use a column heading to sort.',6:'Technology and discoveries. Research grows once a Tower of science is built and staffed. Use a column heading to sort.',7:'Agents, cover and assignments. Select an agent to review its location and task. Use a column heading to sort.',8:'Kingdom standings and victory progress. Compare score, population and territory. Use a column heading to sort.'};
  const DEFAULT_HELP='Select a row to inspect it.';
  // Empty states name the missing prerequisite and the next step instead of a generic notice.
  const EMPTY={1:'No kingdom records yet. Explore the map to meet your neighbours.',2:'No villages yet. Found a settlement to begin your kingdom.',3:'No economic records yet. Build markets and collect taxes so your treasury has income to report.',4:'No caravans or routes yet. Build a market, then send a caravan to trade with another kingdom.',5:'No soldiers or commanders yet. Train villagers in a settlement to raise a force.',6:'No research yet. Build a Tower of science and staff it to begin research.',7:'No agents yet. Hire a spy to gather intelligence on your rivals.',8:'No standings yet. Explore the map to meet the other kingdoms.'};
@@ -33,6 +33,11 @@ let current=null;const snapshots={};const cache={};let lastSnapshot=null;
  // Exact faction colours emitted by the engine (same palette entry used for units, buildings,
  // flags and map markers). Keyed by the engine's kingdom name.
  const factions=new Map();
+ // Live diplomacy choices published by the engine (TalkRes::disp_talk), in the engine's own
+ // coordinates. Each one is a real choice row: clicking its y sends that request.
+ let talkChoices=[];
+ // The engine draws diplomacy choices in a fixed band under the kingdom list.
+ const TALK_BAND={top:296,bottom:520};
  function colorName(r,g,b){
   const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;
   const v=max/255,s=max?d/max:0;let h=0;
@@ -223,7 +228,7 @@ const SECTIONS={
    return {name,engine,pair,self:fac?!!fac.self:name==='Your Kingdom'};
   }).filter(r=>r.name);
  }
- function kingdomTabPanel(panel,records){
+ function kingdomTabPanel(panel,records,talk,talkRegion){
   panel.replaceChildren();
   const sel=kingdomView.selected?records.find(r=>r.name===kingdomView.selected):null;
   const def=(list)=>{const dl=el('dl','',panel);dl.className='kingdom-facts';
@@ -239,8 +244,19 @@ const SECTIONS={
    if(sel.self){const p=el('p','This is your own kingdom. Select a foreign kingdom to review diplomacy with it.',panel);p.className='kingdom-hint';return;}
    el('h3','Diplomacy with '+sel.name,panel).className='kingdom-panel-title';
    def([['Current status',sel.pair['Diplomatic status']],['Reputation',sel.pair['Reputation']],['Attack permission',sel.pair['Can attack']],['Trade treaty',sel.pair['Trade treaty']],['Trade amount',sel.pair['Trade amount']]]);
+   // Engine notices (message sent, message limit) sit in the same band as the choice rows.
+   const choiceYs=new Set(talk.map(c=>c.y+2));
+   const notices=(talkRegion||[]).flatMap(r=>r.items.filter(i=>i.x<=24&&!choiceYs.has(i.y)).map(i=>i.text)).filter(Boolean);
+   notices.forEach(text=>{const p=el('p',text,panel);p.className='kingdom-notice';});
+   if(talk.length){
+    const actions=el('nav','',panel);actions.className='diplomacy-actions';
+    actions.setAttribute('aria-label','Diplomatic requests to '+sel.name);
+    for(const choice of talk){const b=el('button',choice.text,actions);b.type='button';
+     b.onclick=()=>clickAt(choice.x1+10,choice.y+2);}
+    return;
+   }
    const note=el('p','',panel);note.className='kingdom-hint';
-   note.textContent='No diplomatic actions are available from this report. Treaty and war decisions are made through the game\u2019s own diplomacy screens; this page summarises the current relationship.';
+   note.textContent='No requests can be sent to this kingdom right now. A kingdom answers at most three pending messages before it replies to any of them.';
    return;
   }
   const events=newsLog.filter(line=>!sel||line.includes(sel.name));
@@ -248,7 +264,7 @@ const SECTIONS={
   const list=el('ol','',panel);list.className='kingdom-events';
   events.slice().reverse().forEach(line=>el('li',line,list));
  }
- function buildKingdomTabs(){
+ function buildKingdomTabs(talk,talkRegion){
   const root=el('section','',document.createDocumentFragment());root.className='kingdom-tabs';
   const list=el('nav','',root);list.className='kingdom-tablist';list.setAttribute('role','tablist');list.setAttribute('aria-label','Kingdoms views');
   const panel=el('div','',root);panel.className='kingdom-tabpanel';panel.id='kingdom-panel';panel.setAttribute('role','tabpanel');panel.tabIndex=0;
@@ -266,9 +282,11 @@ const SECTIONS={
    return b;
   });
   function paint(){
+   // The choices are drawn by the engine only while its own report is in diplomacy mode.
+   call('web_nation_diplomacy',['number'],[kingdomView.tab==='diplomacy'?1:0]);
    buttons.forEach((b,i)=>{const on=defs[i][0]===kingdomView.tab;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;b.classList.toggle('is-active',on);});
    panel.setAttribute('aria-labelledby','kingdom-tab-'+kingdomView.tab);
-   kingdomTabPanel(panel,kingdomRecords());
+   kingdomTabPanel(panel,kingdomRecords(),talk,talkRegion);
   }
   paint();
   return {root,paint};
@@ -318,13 +336,14 @@ const SECTIONS={
   const inBand=(r)=>starts.some(s=>Math.abs(r.y-s.y)<=(s.section.band||20));
   let active=null,activeRows=[];
   const rendered=new Set();
- const pendingNotes=[];
+ const pendingNotes=[];const talkRegion=[];
  const flush=()=>{
   if(active&&activeRows.length){frag.append(buildTable(snapshot.mode,active.si,active.section,activeRows));rendered.add(active.si);activeRows=[];}
   while(pendingNotes.length)renderNotes(pendingNotes.shift(),frag);
  };
   for(const row of rows){
    if(tabRow&&row===tabRow)continue;
+   if(snapshot.mode===1&&row.items.length&&row.items.every(i=>i.y>=TALK_BAND.top&&i.y<=TALK_BAND.bottom)){talkRegion.push(row);continue;}
    if(inBand(row)){flush();active=starts.find(s=>Math.abs(row.y-s.y)<=(s.section.band||20));continue;}
    const firstText=(row.items.slice().sort((a,b)=>a.x-b.x)[0]?.text||'');
    const note=NOTE_RX[snapshot.mode]?.test(firstText)||row.items.length<2;
@@ -341,7 +360,7 @@ const SECTIONS={
   }
   let kingdomUi=null;
   if(snapshot.mode===1){
-   kingdomUi=buildKingdomTabs();
+   kingdomUi=buildKingdomTabs(talkChoices.slice(),talkRegion);
    frag.append(kingdomUi.root);
   }
   if(isEmptyReport(snapshot.mode,texts)&&!spec){const empty=el('p',EMPTY[snapshot.mode]||'No records to display for this kingdom.',frag);empty.className='empty-state';}
@@ -370,6 +389,9 @@ const news=el('aside','',document.body);news.id='siege-news';news.hidden=true;ne
 const tooltip=el('aside','',document.body);tooltip.id='siege-tooltip';tooltip.hidden=true;tooltip.setAttribute('role','tooltip');let tooltipTimer;
 window.siegePresentation={
  faction(name,code,r,g,b,self){factions.set(String(name),{code,r,g,b,self:!!self});},
+ talkBegin(){talkChoices=[];},
+ talkChoice(index,y,x1,x2,text){const value=clean(text);if(!value)return;
+  talkChoices.push({index,y:Number(y),x1:Number(x1),x2:Number(x2),text:value});},
  tooltip(title,description){tooltip.replaceChildren();el('strong',clean(title),tooltip);el('span',clean(description),tooltip);tooltip.hidden=false;clearTimeout(tooltipTimer);tooltipTimer=setTimeout(()=>tooltip.hidden=true,1800);},
  begin(kind,mode,reset=1){if(kind==='report')beginReportLoad(mode);current=!reset&&snapshots[kind]?{...snapshots[kind],texts:snapshots[kind].texts.map(t=>({...t})),buttons:snapshots[kind].buttons.map(b=>({...b})),lists:[]}:{kind,mode,texts:[],buttons:[],lists:[]};},
  text(x,y,h,text){if(!current)return;const value=clean(text);if(!value)return;const existing=current.texts.find(t=>t.x===x&&t.y===y);if(existing){existing.text=value;existing.h=h;}else current.texts.push({x,y,h,text:value});},

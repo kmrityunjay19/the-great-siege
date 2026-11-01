@@ -34,7 +34,7 @@ print('Linking WebAssembly',flush=True);subprocess.run(args,check=True)
 # Emscripten owns the main script tag generated from {{{ SCRIPT }}}. Version it
 # after linking for the same cache-safe behavior as the other runtime assets.
 html_path=out/'7kaa.html'
-html=html_path.read_text().replace('src="7kaa.js"','src="7kaa.js?v=20261101-3"').replace('src=7kaa.js','src="7kaa.js?v=20261101-3"')
+html=html_path.read_text().replace('src="7kaa.js"','src="7kaa.js?v=20261101-5"').replace('src=7kaa.js','src="7kaa.js?v=20261101-5"')
 html_path.write_text(html)
 args=[sys.executable,str(em/'tools/file_packager.py'),str(out/'extras.data'),'--preload']
 for name in ['ENCYC','ENCYC2','SCENARIO','SCENARI2','TUTORIAL']:

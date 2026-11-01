@@ -1,0 +1,73 @@
+diff --git a/include/web_siege_present.h b/include/web_siege_present.h
+index f212ccb..5ee1789 100644
+--- a/include/web_siege_present.h
++++ b/include/web_siege_present.h
+@@ -13,9 +13,19 @@ inline void siege_present_text(int x,int y,int h,const char* text) {
+ inline void siege_present_button(int x1,int y1,int x2,int y2,const char* text,int enabled,int pushed) {
+  EM_ASM({if(window.siegePresentation)window.siegePresentation.button($0,$1,$2,$3,UTF8ToString($4),$5,$6);},x1,y1,x2,y2,text?text:"Action",enabled,pushed);
+ }
++// Diplomacy choices are drawn as highlighted text rows, not buttons, so publish them
++// explicitly: the browser panel renders real buttons that click back into those rows.
++inline void siege_present_talk_begin() {
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.talkBegin();});
++}
++inline void siege_present_talk_choice(int index,int y,int x1,int x2,const char* text) {
++ EM_ASM({if(window.siegePresentation)window.siegePresentation.talkChoice($0,$1,$2,$3,UTF8ToString($4));},index,y,x1,x2,text?text:"");
++}
+ #else
+ inline void siege_present_begin(const char*,int=0,int=1){}
+ inline void siege_present_end(){}
+ inline void siege_present_text(int,int,int,const char*){}
+ inline void siege_present_button(int,int,int,int,const char*,int,int){}
++inline void siege_present_talk_begin(){}
++inline void siege_present_talk_choice(int,int,int,int,const char*){}
+ #endif
+diff --git a/src/OSYS2.cpp b/src/OSYS2.cpp
+index c09a9aa..3172687 100644
+--- a/src/OSYS2.cpp
++++ b/src/OSYS2.cpp
+@@ -74,6 +74,12 @@ extern "C" EMSCRIPTEN_KEEPALIVE void web_present_click(int x,int y) {
+  mouse.reset_boundary();
+ }
+ extern "C" EMSCRIPTEN_KEEPALIVE void web_hud_action(int action) { if(action>=0 && action<=13)siege_hud_pending=action+1; }
++// Switch the kingdom report between its own information page and the engine's diplomacy
++// choices, so the browser panel can drive treaty proposals without clicking tab pixels.
++extern "C" EMSCRIPTEN_KEEPALIVE void web_nation_diplomacy(int enable) {
++ if(sys.view_mode!=MODE_NATION || info.viewing_nation_recno!=nation_array.player_recno) return;
++ info.nation_report_mode = enable ? NATION_REPORT_TALK : NATION_REPORT_INFO;
++}
+ #endif
+ #include <CmdLine.h>
+ #include <gettext.h>
+diff --git a/src/OTALKRES.cpp b/src/OTALKRES.cpp
+index f22ce5d..aba6d00 100644
+--- a/src/OTALKRES.cpp
++++ b/src/OTALKRES.cpp
+@@ -36,6 +36,7 @@
+ #include <OSE.h>
+ // #### end Gilbert 9/10 ######//
+ #include "gettext.h"
++#include "web_siege_present.h"
+ 
+ //---------- the subtitle area ----------//
+ 
+@@ -904,6 +905,10 @@ void TalkRes::reply_talk_msg(int talkMsgRecno, char replyType, char remoteAction
+ 
+ void TalkRes::disp_talk()
+ {
++	// Publish the live choice list. Emitted before any early return so a panel that
++	// kept an older list cannot offer a choice the engine has since withdrawn.
++	siege_present_talk_begin();
++
+ 	//----- if the player can send no more message to the nation ---//
+ 
+ 	if( !info.player_reply_mode &&
+@@ -967,6 +972,8 @@ void TalkRes::disp_talk()
+ 			str = talk_choice_array[i].str;
+ 
+ 		font_san.put_paragraph( TALK_X1+3, y+2, TALK_X2-3, y+font_san.height()+1, str );
++
++		siege_present_talk_choice( i, y, TALK_X1, TALK_X2, talk_choice_array[i].str );
+ 	}
+ }
+ //-------- End of function TalkRes::disp_talk ---------//

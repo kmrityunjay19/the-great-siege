@@ -118,6 +118,9 @@ body:not(.siege-playing) #siege-canvas-veil{display:block}
 #siege-report .kingdom-facts dd{margin:0;padding:9px 12px;background:#14282c;color:#e2eae2;font:500 13px/1.4 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;border-top:1px solid #24403f}
 #siege-report .kingdom-facts div:first-child dt,#siege-report .kingdom-facts div:first-child dd{border-top:0}
 #siege-report .kingdom-hint{margin:0;color:var(--muted);font-size:13px;line-height:1.55;max-width:64ch}
+#siege-report .diplomacy-actions{display:flex;flex-direction:column;gap:8px;align-items:stretch;margin:10px 0 0;padding:0}
+#siege-report .diplomacy-actions button{min-height:44px;text-align:left}
+#siege-report .kingdom-notice{margin:0 0 10px;padding:9px 12px;border-left:3px solid var(--gold);border-radius:6px;background:#172d32;color:#e2eae2;font-size:13px;line-height:1.5;max-width:64ch}
 #siege-report .kingdom-events{margin:0;padding-left:20px;color:#cfd9d1;font-size:13px;line-height:1.6}
 #siege-report .kingdom-events li{padding:6px 0;border-bottom:1px dotted #2a4545}
 #siege-report .kingdom-events li:last-child{border-bottom:0}
