@@ -138,16 +138,16 @@
       <h2>The Great Siege</h2>
       <p><strong>Lead developer</strong><br>Mrityunjay Kumar</p>
       <p><strong>Engine &amp; open-source acknowledgment</strong><br>The Great Siege is an independent web strategy game powered by a modified engine derived from <em>Seven Kingdoms: Ancient Adversaries</em>, originally created by Trevor Chan / Enlight Software.</p>
-      <p><strong>License</strong><br>Published under the <a href="COPYING.txt">GNU General Public License (GPLv2)</a>. Source code and build instructions are available in the <a href="source-code.tar.gz">source archive</a> · <a href="https://github.com/your-account/the-great-siege" target="_blank" rel="noopener">public GitHub repository</a>.</p>
+      <p><strong>License</strong><br>Published under the <a href="COPYING.txt">GNU General Public License (GPLv2)</a>. The complete source, engine patches and build instructions are published in the <a href="https://github.com/kmrityunjay19/the-great-siege" target="_blank" rel="noopener">source repository</a>.</p>
       <p id="musiccredit"><strong>Assets &amp; audio</strong><br>Custom visual and audio credits will be listed here as commissioned assets are added. Original GPL artwork and sound effects remain credited to the upstream project; the separately licensed original soundtrack is not included.</p>
       <p><button id="aboutback" type="button">Back to Main Menu</button></p>
     </div>
   </div>
-  <script src="siege-pages.js?v=20261026-10"></script>
-  <script src="siege-hud.js?v=20261026-10"></script>
-  <link rel="stylesheet" href="siege-modern.css?v=20261026-10">
-  <script src="siege-core.js?v=20261026-10"></script>
-  <script src="siege-presentation.js?v=20261026-10"></script>
+  <script src="siege-pages.js?v=20261101-1"></script>
+  <script src="siege-hud.js?v=20261101-1"></script>
+  <link rel="stylesheet" href="siege-modern.css?v=20261101-1">
+  <script src="siege-core.js?v=20261101-1"></script>
+  <script src="siege-presentation.js?v=20261101-1"></script>
   <script>
     var siegeRuntimeReady = false;
     var statusEl = document.getElementById('status');
@@ -156,7 +156,7 @@
     var Module = {
       // Version runtime assets so a normal refresh loads one coherent build.
       locateFile: function (path) {
-          return path + (path.indexOf('?') < 0 ? '?v=20261026-10' : '&v=20261026-10');
+          return path + (path.indexOf('?') < 0 ? '?v=20261101-1' : '&v=20261101-1');
       },
       canvas: (function () {
         var c = document.getElementById('canvas');

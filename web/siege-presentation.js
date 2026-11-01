@@ -6,6 +6,11 @@ const el=(tag,text,parent)=>{const n=document.createElement(tag);if(text)n.textC
 const clean=SiegeCore.clean;
 const call=(name,types=[],args=[])=>Module.ccall(name,null,types,args);
 const titles=['World','Kingdoms','Villages','Economy','Trade','Military','Research','Espionage','Ranking','Kingdom activity'];
+ // Per-report guidance: each page explains what its rows are and the one action worth taking.
+ const HELP={1:'Diplomacy, relations and intelligence. Select a kingdom row to inspect it and open its diplomacy options; double-click a location to centre the map on it.',2:'Population, loyalty and structures. Select a village to centre the map and open its management panel.',3:'Yearly income and expenses. Select a line to see what drives your treasury.',4:'Caravans, ships and routes. A caravan needs a market and a destination settlement.',5:'Commanders, troops and units. Select one to inspect it; double-click to centre the map on it.',6:'Technology and discoveries. Research grows once a Tower of science is built and staffed.',7:'Agents, cover and assignments. Select an agent to review its location and task.',8:'Kingdom standings and victory progress. Compare score, population and territory.'};
+ const DEFAULT_HELP='Select a row to inspect it.';
+ // Empty states name the missing prerequisite and the next step instead of a generic notice.
+ const EMPTY={1:'No kingdom records yet. Explore the map to meet your neighbours.',2:'No villages yet. Found a settlement to begin your kingdom.',3:'No economic records yet. Build markets and collect taxes so your treasury has income to report.',4:'No caravans or routes yet. Build a market, then send a caravan to trade with another kingdom.',5:'No soldiers or commanders yet. Train villagers in a settlement to raise a force.',6:'No research yet. Build a Tower of science and staff it to begin research.',7:'No agents yet. Hire a spy to gather intelligence on your rivals.',8:'No standings yet. Explore the map to meet the other kingdoms.'};
 
 function clickAt(x,y){call('web_present_click',['number','number'],[Math.round(x),Math.round(y)]);}
 
@@ -14,7 +19,7 @@ function buttonLabel(code){if(/[a-z ]/.test(code)&&code!=='Action')return clean(
 const panelBase=el('div','',document.body);panelBase.id='siege-panel-base';panelBase.setAttribute('aria-hidden','true');
 const report=el('section','',document.body);report.id='siege-report';report.hidden=true;report.setAttribute('aria-label','Kingdom report');
 const rh=el('header','',report),rt=el('div','',rh);el('small','THE KINGDOM COUNCIL',rt);const reportTitle=el('h1','Kingdoms',rt);const closeReport=el('button','← Return to world',rh);closeReport.onclick=()=>call('web_hud_action',['number'],[0]);
-const hint=el('p','Live kingdom records. Select a row to inspect it; double-click a location to travel there.',report);hint.className='report-help';
+const hint=el('p','',report);hint.className='report-help';
 const reportScroll=el('div','',report);reportScroll.className='report-scroll';reportScroll.tabIndex=0;reportScroll.setAttribute('aria-label','Scrollable report data');
 const reportBody=el('div','',reportScroll);const paging=el('nav','',report);paging.className='report-paging';paging.setAttribute('aria-label','Report record navigation');
 const detail=el('aside','',document.body);detail.id='siege-detail';detail.hidden=true;detail.setAttribute('aria-label','Detailed management');
@@ -23,8 +28,18 @@ const ending=el('section','',document.body);ending.id='siege-ending';ending.hidd
 const eh=el('header','',ending);el('small','THE CHRONICLES OF YOUR REIGN',eh);const endTitle=el('h1','Your legacy',eh);const endBody=el('div','',ending);endBody.className='end-records';const continueEnd=el('button','Continue →',ending);continueEnd.className='primary';continueEnd.onclick=()=>call('web_page_choose',['number'],[1]);
 let current=null;const snapshots={};const cache={};
 const rowsFrom=SiegeCore.rows;
-function renderReport(snapshot){
- reportTitle.textContent=titles[snapshot.mode]||'Kingdom records';report.dataset.mode=snapshot.mode;
+// The engine always emits column headings, so an empty report is one whose headings carry no
+ // records: a zero total, or (for research) no numeric progress anywhere on the page.
+ function isEmptyReport(mode,texts){
+  if(!texts.length)return true;
+  const flat=texts.map(t=>t.text).join(' ');
+  if(mode===4)return /Total Caravans:\s*0/i.test(flat);
+  if(mode===6)return !/\d/.test(flat);
+  if(mode===7)return /Total Spies:\s*0/i.test(flat);
+  return false;
+ }
+ function renderReport(snapshot){
+ reportTitle.textContent=titles[snapshot.mode]||'Kingdom records';report.dataset.mode=snapshot.mode;hint.textContent=HELP[snapshot.mode]||DEFAULT_HELP;
  const texts=snapshot.texts.filter(t=>t.x<576&&t.y>=54&&t.y<600);
  const signature=JSON.stringify([snapshot.mode,texts,snapshot.buttons,snapshot.lists]);if(cache.report===signature)return;cache.report=signature;
  const previousFocus=document.activeElement?.dataset?.recordKey;
@@ -37,7 +52,7 @@ function renderReport(snapshot){
   const cells=row.items.sort((a,b)=>a.x-b.x);
   cells.forEach((t,i)=>{const b=el('button',t.text,line);b.className='record-cell';b.dataset.recordKey=t.x+':'+t.y;b.style.left=(Math.max(0,t.x-6)/566*100)+'%';const next=cells[i+1]?.x||568;b.style.width=(Math.max(28,next-t.x-4)/566*100)+'%';b.title=t.text;b.onclick=()=>clickAt(t.x+3,t.y+2);b.ondblclick=()=>{setTimeout(()=>clickAt(t.x+3,t.y+2),90);if([2,4,5,6,7].includes(snapshot.mode))setTimeout(()=>call('web_hud_action',['number'],[0]),200);};});
  }
- if(!texts.length)el('p','No records to display for this kingdom.',frag).className='empty-state';
+ if(isEmptyReport(snapshot.mode,texts)){const empty=el('p',EMPTY[snapshot.mode]||'No records to display for this kingdom.',frag);empty.className='empty-state';}
  const toolbar=el('div','',frag);toolbar.className='native-actions';
  for(const b of snapshot.buttons.filter(b=>b.x1<576&&b.y1>=54)){
   const label=buttonLabel(b.text);
