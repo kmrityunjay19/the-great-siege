@@ -4,7 +4,7 @@
 # Run ./build.sh first.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD="$ROOT/build"
 WEB="$ROOT/web"
 OUT="$ROOT/dist"

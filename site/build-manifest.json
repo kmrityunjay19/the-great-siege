@@ -1,0 +1,13 @@
+{
+  "game": "The Great Siege",
+  "version": "2.15.6",
+  "upstream": "14e6fdfba9481af4dc3a54722614a608776e20bc",
+  "patched_engine": "157fd69053114fe2051a15aebf4f1ab1e5bfc6a8",
+  "browser_port": "0047af3db569c63f94f4f6634ce672295cf94be5",
+  "emscripten": "4.0.10",
+  "multiplayer": false,
+  "local_browser_port": "0047af3db569c63f94f4f6634ce672295cf94be5",
+  "based_on": "Seven Kingdoms: Ancient Adversaries",
+  "edition": "0.1",
+  "original_soundtrack_included": false
+}

@@ -13,11 +13,11 @@ map → full single-player → multiplayer + polish.
 
 ```
 7kaa/
-  upstream/    # git clone of the3dfxdude/7kaa (engine source + data/, GPLv2)
-  emsdk/       # Emscripten SDK toolchain
+  src/engine/    # git clone of the3dfxdude/7kaa (engine source + data/, GPLv2)
+  .toolchain/emsdk/       # Emscripten SDK toolchain
   build/       # emscripten output: 7kaa.js / .wasm / .data  (gitignored)
-  web/         # shell.html + dev tooling (web/tools/)
-  patches/     # our engine changes exported from upstream's web-port branch
+  web/         # shell.html + dev tooling (scripts/)
+  src/patches/     # our engine changes exported from upstream's web-port branch
   relay/       # node WebSocket multiplayer relay (M5)
   MAINTAINING.md  # how to re-apply our changes onto a new upstream release
   CLAUDE.md    # this file
@@ -25,35 +25,35 @@ map → full single-player → multiplayer + polish.
 
 ## Our engine changes are a patchset — KEEP IT CURRENT
 
-Our edits to `upstream/` (the engine) live as a feature-grouped branch **`web-port`** in
-the `upstream/` clone, exported to **`patches/*.patch`**. This is how we re-apply our work
+Our edits to `src/engine/` (the engine) live as a feature-grouped branch **`web-port`** in
+the `src/engine/` clone, exported to **`src/patches/*.patch`**. This is how we re-apply our work
 onto a new 7kaa release (`git am --3way`). See **`MAINTAINING.md`** for the full model and
 backport runbook.
 
 **Two git repos:** the **repo root** is its own git repo (branch `main`) that
-version-controls our infra + `patches/`; the **`upstream/`** engine clone is a *separate*
-repo (branch `web-port`) and is gitignored from the root (as are `emsdk/`, `build/`,
-`node_modules/`). So `git` in the root = our infra; `git` in `upstream/` = the engine
+version-controls our infra + `src/patches/`; the **`src/engine/`** engine clone is a *separate*
+repo (branch `web-port`) and is gitignored from the root (as are `.toolchain/emsdk/`, `build/`,
+`node_modules/`). So `git` in the root = our infra; `git` in `src/engine/` = the engine
 patchset.
 
-**Whenever you change a file under `upstream/`**, before ending the session: commit it to
+**Whenever you change a file under `src/engine/`**, before ending the session: commit it to
 the `web-port` branch (`cd upstream && git add … && git commit`), then run
-**`web/tools/refresh-patches.sh`** and commit the refreshed `patches/` in the **root** repo
+**`scripts/refresh-patches.sh`** and commit the refreshed `src/patches/` in the **root** repo
 too. The root infra (`build.sh`, `web/`, `relay/`, `docs/`) is version-independent and is
 **not** part of the engine patchset.
 
-`upstream/data/` (≈102 MB) ships in the repo and holds everything the game loads at
+`src/engine/data/` (≈102 MB) ships in the repo and holds everything the game loads at
 runtime: `RESOURCE/` (`.RES` resource DBs incl. fonts `FNT_*`, `CURSOR.RES`),
 `IMAGE/`, `SPRITE/`, `SOUND/`, `SCENARIO/`, `ENCYC/`. The game locates it via the
 **`SKDATA`** env var (native: `SKDATA=data ./src/7kaa`); in the browser we preload it
 into the Emscripten FS at `/data`.
 
-## Source acquisition (already done; re-run if `upstream/` missing)
+## Source acquisition (already done; re-run if `src/engine/` missing)
 
 ```bash
 git clone https://github.com/the3dfxdude/7kaa.git upstream      # source + data
 git clone https://github.com/emscripten-core/emsdk.git emsdk
-emsdk/emsdk install latest && emsdk/emsdk activate latest
+.toolchain/emsdk/emsdk install latest && .toolchain/emsdk/emsdk activate latest
 ```
 
 The release tarball `7kaa-2.15.7.tar.gz` on SourceForge (`skfans`) also bundles
@@ -62,10 +62,10 @@ locally. Upstream is GPLv2.
 
 ## Build (Emscripten)
 
-The toolchain: `source emsdk/emsdk_env.sh` (bash; the fish shell can choke on the env
+The toolchain: `source .toolchain/emsdk/emsdk_env.sh` (bash; the fish shell can choke on the env
 script — invoke emcc from a bash subshell if needed).
 
-1. **Generate `./configure`** (native autotools, once): in `upstream/`,
+1. **Generate `./configure`** (native autotools, once): in `src/engine/`,
    `LIBTOOLIZE=glibtoolize ./autogen.sh` (macOS names libtoolize `glibtoolize`).
 2. **Configure under Emscripten**, bypassing pkg-config for the SDL2/OpenAL ports by
    setting the `*_CFLAGS`/`*_LIBS` env vars (PKG_CHECK_MODULES skips detection when
@@ -125,7 +125,7 @@ the URL headless and screenshot the canvas as objective confirmation.
   the menu loop's `i == MAIN_OPTION_COUNT-1` break is also guarded so Quit stays on the
   menu. **Donate** is a separate gold link on the main menu: a pre-rendered bitmap
   (`src/donate_img.h`, a gold "♥ Donate" + brighter hover variant, regenerate with
-  `web/tools/gen_donate_img.py` — recolored to PAL_MENU's title-gold ramp 228–234 since
+  `scripts/gen_donate_img.py` — recolored to PAL_MENU's title-gold ramp 228–234 since
   no engine font is gold). `OGAMMAIN.cpp` blits it with `put_bitmap_trans` (index 255 =
   transparent) **every frame** (the menu page-flips, so a refresh-only draw wouldn't
   persist across submenu returns), swapping to the bright bitmap on hover; the click
@@ -177,7 +177,7 @@ the URL headless and screenshot the canvas as objective confirmation.
   the tablet build is fully playable via gestures + the ESC button, those actions are reachable by
   tapping in-game UI, and enabling default hotkeys is a behavior change needing sign-off.
 
-## Engine module map (`upstream/src`, `O*` = "object" classes)
+## Engine module map (`src/engine/src`, `O*` = "object" classes)
 
 | Area | Files |
 |------|-------|
@@ -208,9 +208,9 @@ the URL headless and screenshot the canvas as objective confirmation.
   fully-rendered, interactive title/main menu. Evidence: `docs/m1-main-menu.png`.
   Build: `2.5MB 7kaa.wasm`, `295KB 7kaa.js`, `101MB 7kaa.data` (all assets preloaded).
   Run: `cd build && python3 -m http.server 8000` → http://localhost:8000/7kaa.html
-  (or just run `./build.sh` from scratch).
+  (or just run `scripts/build.sh` from scratch).
 - **Only one source change was needed** to compile: the `LC_MESSAGES` portability fix
-  in `upstream/src/LocaleRes.cpp` (the predicted x86-asm patches turned out unnecessary
+  in `src/engine/src/LocaleRes.cpp` (the predicted x86-asm patches turned out unnecessary
   — both asm blocks are already wrapped in `#ifndef USE_ASM`). Note: the "Multiplayer"
   entry still appears on the menu even with `--disable-multiplayer`; selecting it will
   not work until M4 (networking bridge).
@@ -233,7 +233,7 @@ not building screens:
   - ✅ **Audio** — OpenAL→WebAudio works; the context starts `suspended` and flips to
     `running` on the first user click (no OpenAL errors). **Music now bundled** (2026-06-09):
     the free `7kaa-music-2.15` package (10 PCM WAVs, ~49MB; not GPL but redistributable,
-    from 7kfans) is extracted to `upstream/data/MUSIC/` and packaged into `extras.data`.
+    from 7kfans) is extracted to `src/engine/data/MUSIC/` and packaged into `extras.data`.
     `Music::play` → `audio.play_long_wav` (already implemented) plays them once `dir_music`
     is detected (see the rescan gotcha below).
   - ✅ **Input** — mouse (menu nav, unit/town selection, edge-scroll) and keyboard
@@ -288,7 +288,7 @@ not building screens:
     throttled background tab): Start the game and confirm identical map seed + commands propagate ~8 frames;
     deep-CRC determinism soak (`SYNC2.SYS` / `config_adv.remote_compare_object_crc`, zero `MSG_COMPARE_CRC`
     desyncs); in-game nation→`NATION_AI` takeover ~20s after a player drops (`OSYS.cpp:1418`).
-    To test: `cd relay && npm start`; `./build.sh`; serve `build/`; open in **two real browser windows**,
+    To test: `cd relay && npm start`; `scripts/build.sh`; serve `build/`; open in **two real browser windows**,
     host Create a game (its name is the room code), guest Multiplayer→New Game→Enter Address→type that code→Join.
 
 **Multi-agent (ultracode):** worth it before M2 to fan agents across modules and build

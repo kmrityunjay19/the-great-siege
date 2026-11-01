@@ -2,10 +2,10 @@
 # Build 7kaa for the web. Compiles the engine (via autotools+emconfigure) and links
 # a browser bundle with the Emscripten-specific flags. See CLAUDE.md for details.
 set -e
-ROOT="$(cd "$(dirname "$0")" && pwd)"
-source "$ROOT/emsdk/emsdk_env.sh" >/dev/null 2>&1
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT/.toolchain/emsdk/emsdk_env.sh" >/dev/null 2>&1
 
-cd "$ROOT/upstream"
+cd "$ROOT/src/engine"
 
 # --- configure (once; reconfigures until the M5 src/ws Makefile exists) ---
 # M5 re-enables multiplayer over WebSockets, which added src/ws + new configure.ac
@@ -14,7 +14,7 @@ cd "$ROOT/upstream"
 if [ ! -f Makefile ] || [ ! -f src/ws/Makefile ]; then
   rm -f configure   # force autogen to regenerate from the edited configure.ac
   [ -f configure ] || LIBTOOLIZE=glibtoolize ACLOCAL_PATH=/opt/homebrew/share/aclocal ./autogen.sh
-  SDL2_CONFIG="$ROOT/build-tools/sdl2-config" OPENAL_CFLAGS="" OPENAL_LIBS="-lopenal" \
+  SDL2_CONFIG="$ROOT/src/build-tools/sdl2-config" OPENAL_CFLAGS="" OPENAL_LIBS="-lopenal" \
     emconfigure ./configure \
       --enable-multiplayer --enable-websocket --disable-enet --disable-curl --disable-nls
 fi
@@ -28,7 +28,7 @@ emmake make -j8
 # music — ~107MB raw) is packaged separately below and streamed in the background
 # after boot, so the initial download to start playing stays small. Once that bundle
 # mounts, web_rescan_data_dirs() (called from shell.html) re-detects those dirs.
-cd "$ROOT/upstream/src"
+cd "$ROOT/src/engine/src"
 em++ -include "../include/config.h" -fsigned-char -O2 \
   *.o \
   ./openal/libaudio_openal.a \
@@ -47,8 +47,8 @@ em++ -include "../include/config.h" -fsigned-char -O2 \
   -o "$ROOT/build/7kaa.html"
 
 # --- package optional content as a separate, background-loaded bundle ---
-cd "$ROOT/upstream"
-"$ROOT/emsdk/upstream/emscripten/tools/file_packager" "$ROOT/build/extras.data" \
+cd "$ROOT/src/engine"
+"$ROOT/.toolchain/emsdk/upstream/emscripten/tools/file_packager" "$ROOT/build/extras.data" \
   --preload data/ENCYC@/data/ENCYC \
   --preload data/ENCYC2@/data/ENCYC2 \
   --preload data/SCENARIO@/data/SCENARIO \

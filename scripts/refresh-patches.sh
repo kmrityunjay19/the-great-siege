@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Refresh the exported patchset (patches/*.patch) from upstream/'s web-port branch.
+# Refresh the exported patchset (patches/*.patch) from src/engine/'s web-port branch.
 # Run this after committing engine changes to web-port, so patches/ stays in sync.
 # See MAINTAINING.md ("Keeping the patchset current").
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # web/tools -> repo root
-cd "$ROOT/upstream"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # scripts -> repo root
+cd "$ROOT/src/engine"
 
 # The commit web-port was started from (cloned 7kaa base, v2.15.6).
 # After a backport onto a newer release, update this to the new base commit.
@@ -21,10 +21,10 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   git status --short >&2
 fi
 
-mkdir -p "$ROOT/patches"
-rm -f "$ROOT"/patches/*.patch
-git format-patch "$BASE"..web-port -o "$ROOT/patches" >/dev/null
+mkdir -p "$ROOT/src/patches"
+rm -f "$ROOT"/src/patches/*.patch
+git format-patch "$BASE"..web-port -o "$ROOT/src/patches" >/dev/null
 
-n="$(ls "$ROOT"/patches/*.patch 2>/dev/null | wc -l | tr -d ' ')"
+n="$(ls "$ROOT"/src/patches/*.patch 2>/dev/null | wc -l | tr -d ' ')"
 echo "refreshed $n patch(es) in patches/:"
-ls -1 "$ROOT"/patches/*.patch | sed "s#$ROOT/##"
+ls -1 "$ROOT"/src/patches/*.patch | sed "s#$ROOT/##"
