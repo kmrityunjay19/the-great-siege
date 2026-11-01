@@ -30,6 +30,38 @@ const eh=el('header','',ending);el('small','THE CHRONICLES OF YOUR REIGN',eh);co
 let current=null;const snapshots={};const cache={};let lastSnapshot=null;
  // Kingdoms sub-view state survives simulation ticks and report rerenders.
  const kingdomView={tab:'information',selected:null};
+ // Exact faction colours emitted by the engine (same palette entry used for units, buildings,
+ // flags and map markers). Keyed by the engine's kingdom name.
+ const factions=new Map();
+ function colorName(r,g,b){
+  const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;
+  const v=max/255,s=max?d/max:0;let h=0;
+  if(d){if(max===r)h=60*(((g-b)/d)%6);else if(max===g)h=60*((b-r)/d+2);else h=60*((r-g)/d+4);}
+  if(h<0)h+=360;
+  let name;
+  if(s<0.18)name=v>0.75?'White':v>0.35?'Grey':'Black';
+  else if(h<15||h>=345)name=(s<0.45&&v<0.7)?'Brown':'Red';
+  else if(h<40)name='Orange';
+  else if(h<70)name='Yellow';
+  else if(h<160)name='Green';
+  else if(h<200)name='Teal';
+  else if(h<255)name='Blue';
+  else if(h<290)name='Indigo';
+  else name='Purple';
+  return {name,hex:'#'+[r,g,b].map(n=>n.toString(16).padStart(2,'0')).join('')};
+ }
+ function factionFor(name){return factions.get(String(name||''))||null}
+ function swatch(fac,kingdom,inline){
+  const node=el('span','',document.createDocumentFragment());
+  node.className='faction-swatch'+(inline?' faction-swatch--inline':'');
+  if(!fac){node.classList.add('is-unknown');node.setAttribute('role','img');
+   node.setAttribute('aria-label','Faction colour unavailable for '+kingdom);node.title='Faction colour unavailable';return node;}
+  const c=colorName(fac.r,fac.g,fac.b);
+  node.style.background=c.hex;node.setAttribute('role','img');node.tabIndex=0;
+  node.setAttribute('aria-label',c.name+' faction colour for '+kingdom);
+  node.title=c.name+' faction colour · '+c.hex;
+  return node;
+ }
  const newsLog=[];
  let reportLoadTimer=null,reportFailTimer=null;
  function beginReportLoad(mode){
@@ -66,7 +98,7 @@ const rowsFrom=SiegeCore.rows;
 // 'at' are the engine's header x positions; stacked two-line labels collapse into one row. 'band' widens
  // the rows treated as the header when the engine splits a group label across two blocks (Trade).
 const SECTIONS={
- 1:[{h:3,first:'Kingdom',endOn:/status with other kingdoms/i,filter:n=>/'s kingdom$/i.test(n)&&!/(\bof\b|\bto\b|\bfrom\b|^your |peace|duration|allow|status with other)/i.test(n),at:[15,216,290,360,420,480],cols:[['Kingdom','id'],['Reputation','num'],['Diplomatic status'],['Can attack'],['Trade treaty'],['Trade amount','num']]}],
+ 1:[{h:3,first:'Kingdom',leading:{label:'Color',kind:'swatch'},endOn:/status with other kingdoms/i,filter:n=>/'s kingdom$/i.test(n)&&!/(\bof\b|\bto\b|\bfrom\b|^your |peace|duration|allow|status with other)/i.test(n),at:[15,216,290,360,420,480],cols:[['Kingdom','id'],['Reputation','num'],['Diplomatic status'],['Can attack'],['Trade treaty'],['Trade amount','num']]}],
  2:[{title:'Villages',h:1,first:'Village',at:[15,165,240,310,370],cols:[['Village','id'],['Villagers','num'],['Peasants','num'],['Loyalty','num'],['Race']]},
     {title:'Structures',h:1,first:'Structure',at:[15,155,232,355,465],cols:[['Structure','id'],['Unit cost','num'],['Structures','num'],['Yearly expense','num'],['Yearly income','num']]}],
  3:[{title:'Income',h:1,first:'Income Item',at:[15,365],cols:[['Income item','id'],['Yearly income','num']]},
@@ -99,6 +131,8 @@ const SECTIONS={
   const scroller=el('div','',wrap);scroller.className='report-table-scroll';scroller.tabIndex=0;scroller.setAttribute('role','group');scroller.setAttribute('aria-label',(section.title||'Records')+' table, scrollable');
   const table=el('table','',scroller);table.className='report-table';
   const head=el('thead','',table),hr=el('tr','',head);
+  const lead=!!section.leading&&!section.group;
+  if(lead){const th=el('th','',hr);th.scope='col';th.className='is-swatch';th.textContent=section.leading.label;th.title='Faction colour used by this kingdom\u2019s units, buildings, flags and map markers';}
   const sorted=sortState[mode+':'+si];
   const headerCells=[];
   const makeTh=(label,ci,extra)=>{
@@ -148,33 +182,45 @@ const SECTIONS={
     return sort.dir==='asc'?cmp:-cmp;
    });
   }
-  if(!records.length){const tr=el('tr','',body);tr.className='is-empty-row';const td=el('td','',tr);td.colSpan=section.cols.length;td.className='is-empty';
+  if(!records.length){const tr=el('tr','',body);tr.className='is-empty-row';const td=el('td','',tr);td.colSpan=section.cols.length+(lead?1:0);td.className='is-empty';
    td.textContent=emptyText||'No records yet.';tr.append(td);}
   for(const rec of records){
    const tr=el('tr','',body);tr.className='record-row';
-   const isSelf=mode===1&&!rec.cells[2]&&!/^your /i.test(rec.cells[0]?.text||'');
+   const engineName=rec.cells[0]?.text||'';
+   const fac=mode===1?factionFor(engineName):null;
+   const isSelf=mode===1&&(fac?!!fac.self:!rec.cells[2]&&!/^your /i.test(engineName));
+   const display=isSelf?'Your Kingdom':null;
+   if(engineName)tr.dataset.engineName=engineName;
+   if(lead){const td=el('td','',tr);td.className='is-swatch';
+    if(rec.cells[0])td.append(swatch(fac,display||engineName,false));}
    section.cols.forEach((c,ci)=>{
     const td=el('td','',tr);if(c[1]==='num')td.classList.add('is-num');if(ci===0)td.classList.add('is-identity');
     const item=rec.cells[ci];
     if(!item){td.classList.add('is-empty');el('span','—',td).setAttribute('aria-label','Not available');return;}
     const btn=el('button','',td);btn.className='record-cell';btn.type='button';btn.dataset.recordKey=item.x+':'+item.y;
-    btn.textContent=item.text;btn.title=item.text;btn.onclick=()=>{clickAt(item.x+3,item.y+2);};
+    btn.textContent=(ci===0&&display)?display:item.text;btn.title=(ci===0&&display)?engineName:item.text;
+    if(ci===0&&display)btn.dataset.engineName=engineName;
+    if(ci===0&&lead)btn.prepend(swatch(fac,display||engineName,true));
+    btn.onclick=()=>{clickAt(item.x+3,item.y+2);};
     btn.ondblclick=()=>{setTimeout(()=>clickAt(item.x+3,item.y+2),90);if([2,4,5,6].includes(mode))setTimeout(()=>call('web_hud_action',['number'],[0]),200);};
     if(mode===1&&/^(yes|no)$/i.test(item.text))btn.setAttribute('aria-label',c[0]+': '+item.text);
    });
-   if(isSelf){const badge=el('span','You',tr.querySelector('td'));badge.className='you-badge';badge.title='Your kingdom';}
   }
   return wrap;
  }
  function kingdomRecords(){
   const table=reportBody.querySelector('table.report-table');
   if(!table)return [];
-  const cols=['Reputation','Diplomatic status','Can attack','Trade treaty','Trade amount'];
+  const heads=[...table.querySelectorAll('thead th')].map(h=>h.textContent.trim());
+  const cell=(tds,name)=>{const k=heads.indexOf(name);const td=k>=0?tds[k]:null;
+   return td&&!td.classList.contains('is-empty')?(td.textContent||'').trim():null;};
   return [...table.querySelectorAll('tbody tr.record-row')].map(tr=>{
    const tds=[...tr.querySelectorAll('td')];
-   const name=(tds[0]?.querySelector('.record-cell')?.textContent||tds[0]?.textContent||'').trim();
-   const pair={};cols.forEach((c,i)=>{const td=tds[i+1];pair[c]=td&&!td.classList.contains('is-empty')?(td.textContent||'').trim():null;});
-   return {name,pair,self:!!tds[0]?.querySelector('.you-badge')};
+   const engine=tr.dataset.engineName||'';
+   const name=(tr.querySelector('td.is-identity .record-cell')?.textContent||'').trim();
+   const pair={};['Reputation','Diplomatic status','Can attack','Trade treaty','Trade amount'].forEach(c=>pair[c]=cell(tds,c));
+   const fac=factionFor(engine);
+   return {name,engine,pair,self:fac?!!fac.self:name==='Your Kingdom'};
   }).filter(r=>r.name);
  }
  function kingdomTabPanel(panel,records){
@@ -231,12 +277,13 @@ const SECTIONS={
   const table=reportBody.querySelector('table.report-table');
   if(!table)return;
   const trs=[...table.querySelectorAll('tbody tr.record-row')];
-  const mark=()=>trs.forEach(tr=>{const on=tr.dataset.kingdom===kingdomView.selected;tr.classList.toggle('is-selected',on);tr.setAttribute('aria-current',on?'true':'false');});
+  const mark=()=>trs.forEach(tr=>{const on=tr.dataset.kingdom===kingdomView.selected;
+   tr.classList.toggle('is-selected',on);tr.setAttribute('aria-current',on?'true':'false');});
   trs.forEach(tr=>{
-   const rec=kingdomRecords().find(r=>tr.textContent.startsWith(r.name));
-   if(!rec)return;
-   tr.dataset.kingdom=rec.name;
-   tr.addEventListener('click',()=>{kingdomView.selected=rec.name;mark();ui.paint();});
+   const name=(tr.querySelector('td.is-identity .record-cell')?.textContent||'').trim();
+   if(!name)return;
+   tr.dataset.kingdom=name;
+   tr.addEventListener('click',()=>{kingdomView.selected=name;mark();ui.paint();});
   });
   mark();
  }
@@ -322,6 +369,7 @@ const SECTIONS={
 const news=el('aside','',document.body);news.id='siege-news';news.hidden=true;news.setAttribute('aria-label','Kingdom news');
 const tooltip=el('aside','',document.body);tooltip.id='siege-tooltip';tooltip.hidden=true;tooltip.setAttribute('role','tooltip');let tooltipTimer;
 window.siegePresentation={
+ faction(name,code,r,g,b,self){factions.set(String(name),{code,r,g,b,self:!!self});},
  tooltip(title,description){tooltip.replaceChildren();el('strong',clean(title),tooltip);el('span',clean(description),tooltip);tooltip.hidden=false;clearTimeout(tooltipTimer);tooltipTimer=setTimeout(()=>tooltip.hidden=true,1800);},
  begin(kind,mode,reset=1){if(kind==='report')beginReportLoad(mode);current=!reset&&snapshots[kind]?{...snapshots[kind],texts:snapshots[kind].texts.map(t=>({...t})),buttons:snapshots[kind].buttons.map(b=>({...b})),lists:[]}:{kind,mode,texts:[],buttons:[],lists:[]};},
  text(x,y,h,text){if(!current)return;const value=clean(text);if(!value)return;const existing=current.texts.find(t=>t.x===x&&t.y===y);if(existing){existing.text=value;existing.h=h;}else current.texts.push({x,y,h,text:value});},

@@ -18,7 +18,7 @@
         // web worker
         PACKAGE_PATH = encodeURIComponent(location.pathname.substring(0, location.pathname.lastIndexOf('/')) + '/');
       }
-      var PACKAGE_NAME = '/Users/mrityunjaykumar/Documents/Codex/2026-10-17/i-w/work/7kaa-web/build/extras.data';
+      var PACKAGE_NAME = '/Users/mrityunjaykumar/Documents/The Great Siege/build/extras.data';
       var REMOTE_PACKAGE_BASE = 'extras.data';
       var REMOTE_PACKAGE_NAME = Module['locateFile'] ? Module['locateFile'](REMOTE_PACKAGE_BASE, '') : REMOTE_PACKAGE_BASE;
 var REMOTE_PACKAGE_SIZE = metadata['remote_package_size'];
@@ -166,10 +166,10 @@ Module['FS_createPath']("/data", "TUTORIAL", true, true);
           var files = metadata['files'];
           for (var i = 0; i < files.length; ++i) {
             DataRequest.prototype.requests[files[i].filename].onload();
-          }          Module['removeRunDependency']('datafile_/Users/mrityunjaykumar/Documents/Codex/2026-10-17/i-w/work/7kaa-web/build/extras.data');
+          }          Module['removeRunDependency']('datafile_/Users/mrityunjaykumar/Documents/The Great Siege/build/extras.data');
 
       };
-      Module['addRunDependency']('datafile_/Users/mrityunjaykumar/Documents/Codex/2026-10-17/i-w/work/7kaa-web/build/extras.data');
+      Module['addRunDependency']('datafile_/Users/mrityunjaykumar/Documents/The Great Siege/build/extras.data');
 
       Module['preloadResults'] ??= {};
 

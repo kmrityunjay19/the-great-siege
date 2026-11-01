@@ -1,0 +1,47 @@
+diff --git a/include/OVGA.h b/include/OVGA.h
+index a01ecbb..4c722c7 100644
+--- a/include/OVGA.h
++++ b/include/OVGA.h
+@@ -105,6 +105,7 @@ public:
+ 	char   is_inited()  { return window != NULL; }
+ 
+ 	int    load_pal(const char* fileName);
++	SDL_Color palette_entry(int i) { return game_pal[i>=0 && i<VGA_PALETTE_SIZE ? i : 0]; }
+ 	void   activate_pal(VgaBuf*);
+ 
+ 	int    set_custom_palette(char*);
+diff --git a/src/OR_NAT.cpp b/src/OR_NAT.cpp
+index 13c447e..3736f12 100644
+--- a/src/OR_NAT.cpp
++++ b/src/OR_NAT.cpp
+@@ -41,6 +41,9 @@
+ #include <OREMOTE.h>
+ #include <locale.h>
+ #include "gettext.h"
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#endif
+ 
+ //------------- Define coordinations -----------//
+ 
+@@ -320,6 +323,20 @@ static void put_nation_rec(int recNo, int x, int y, int refreshFlag)
+ 	y+=5;
+ 
+ 	nationPtr->disp_nation_color(x, y+1);
++#ifdef __EMSCRIPTEN__
++	// Expose the exact faction colour to the accessible web report. This is the same
++	// palette entry the nation's units, buildings, flags and map markers are drawn with.
++	{
++		int colorCode = (int) (unsigned char) nationPtr->nation_color;
++		SDL_Color factionColor = vga.palette_entry(colorCode);
++		EM_ASM({
++			if(window.siegePresentation && window.siegePresentation.faction)
++				window.siegePresentation.faction(UTF8ToString($0), $1, $2, $3, $4, $5);
++		}, nationPtr->nation_name(), colorCode,
++		   (int) factionColor.r, (int) factionColor.g, (int) factionColor.b,
++		   nationRecno == info.viewing_nation_recno ? 1 : 0);
++	}
++#endif
+ 
+ 	font_san.put( x+20 , y, nationPtr->nation_name(), 0, x+215 );
+ 	font_san.put( x+220, y, misc.format((int) nationPtr->reputation) );
