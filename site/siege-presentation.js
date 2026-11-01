@@ -20,6 +20,7 @@ const panelBase=el('div','',document.body);panelBase.id='siege-panel-base';panel
 const report=el('section','',document.body);report.id='siege-report';report.hidden=true;report.setAttribute('aria-label','Kingdom report');
 const rh=el('header','',report),rt=el('div','',rh);el('small','THE KINGDOM COUNCIL',rt);const reportTitle=el('h1','Kingdoms',rt);const closeReport=el('button','← Return to world',rh);closeReport.onclick=()=>call('web_hud_action',['number'],[0]);
 const hint=el('p','',report);hint.className='report-help';
+ const reportStatus=el('p','',report);reportStatus.id='siege-report-status';reportStatus.className='report-status';reportStatus.setAttribute('role','status');reportStatus.setAttribute('aria-live','polite');reportStatus.hidden=true;
 const reportScroll=el('div','',report);reportScroll.className='report-scroll';reportScroll.tabIndex=0;reportScroll.setAttribute('aria-label','Scrollable report data');
 const reportBody=el('div','',reportScroll);const paging=el('nav','',report);paging.className='report-paging';paging.setAttribute('aria-label','Report record navigation');
 const detail=el('aside','',document.body);detail.id='siege-detail';detail.hidden=true;detail.setAttribute('aria-label','Detailed management');
@@ -27,6 +28,29 @@ const dh=el('header','',detail);el('h2','Management',dh);const detailBack=el('bu
 const ending=el('section','',document.body);ending.id='siege-ending';ending.hidden=true;ending.setAttribute('aria-label','Game results');
 const eh=el('header','',ending);el('small','THE CHRONICLES OF YOUR REIGN',eh);const endTitle=el('h1','Your legacy',eh);const endBody=el('div','',ending);endBody.className='end-records';const continueEnd=el('button','Continue →',ending);continueEnd.className='primary';continueEnd.onclick=()=>call('web_page_choose',['number'],[1]);
 let current=null;const snapshots={};const cache={};let lastSnapshot=null;
+ // Kingdoms sub-view state survives simulation ticks and report rerenders.
+ const kingdomView={tab:'information',selected:null};
+ const newsLog=[];
+ let reportLoadTimer=null,reportFailTimer=null;
+ function beginReportLoad(mode){
+  clearTimeout(reportLoadTimer);clearTimeout(reportFailTimer);
+  report.dataset.state='loading';report.setAttribute('aria-busy','true');
+  reportStatus.hidden=true;reportStatus.textContent='';
+  // Only announce loading if the snapshot is genuinely slow; a synchronous render clears it at once.
+  reportLoadTimer=setTimeout(()=>{if(report.dataset.state!=='loading')return;
+   reportStatus.textContent='Loading '+(titles[mode]||'record')+' records…';reportStatus.hidden=false;},220);
+  reportFailTimer=setTimeout(()=>{if(report.dataset.state!=='loading')return;
+   report.dataset.state='error';reportStatus.hidden=false;reportStatus.textContent='';
+   el('strong','Could not load '+(titles[mode]||'record')+' records.',reportStatus);
+   el('span','The game did not respond. Retry, or return to the map and open the report again.',reportStatus).className='report-status-detail';
+   const retry=el('button','Retry',reportStatus);retry.type='button';retry.className='report-retry';
+   retry.onclick=()=>{beginReportLoad(mode);call('web_hud_action',['number'],[mode]);};},8000);
+ }
+ function endReportLoad(state){
+  clearTimeout(reportLoadTimer);clearTimeout(reportFailTimer);
+  report.removeAttribute('data-loading');report.setAttribute('aria-busy','false');
+  report.dataset.state=state;reportStatus.hidden=true;reportStatus.textContent='';
+ }
 const rowsFrom=SiegeCore.rows;
 // The engine always emits column headings, so an empty report is one whose headings carry no
  // records: a zero total, or (for research) no numeric progress anywhere on the page.
@@ -42,7 +66,7 @@ const rowsFrom=SiegeCore.rows;
 // 'at' are the engine's header x positions; stacked two-line labels collapse into one row. 'band' widens
  // the rows treated as the header when the engine splits a group label across two blocks (Trade).
 const SECTIONS={
- 1:[{h:3,first:'Kingdom',at:[15,216,290,360,420,480],cols:[['Kingdom','id'],['Reputation','num'],['Diplomatic status'],['Can attack'],['Trade treaty'],['Trade amount','num']]}],
+ 1:[{h:3,first:'Kingdom',endOn:/status with other kingdoms/i,filter:n=>/'s kingdom$/i.test(n)&&!/(\bof\b|\bto\b|\bfrom\b|^your |peace|duration|allow|status with other)/i.test(n),at:[15,216,290,360,420,480],cols:[['Kingdom','id'],['Reputation','num'],['Diplomatic status'],['Can attack'],['Trade treaty'],['Trade amount','num']]}],
  2:[{title:'Villages',h:1,first:'Village',at:[15,165,240,310,370],cols:[['Village','id'],['Villagers','num'],['Peasants','num'],['Loyalty','num'],['Race']]},
     {title:'Structures',h:1,first:'Structure',at:[15,155,232,355,465],cols:[['Structure','id'],['Unit cost','num'],['Structures','num'],['Yearly expense','num'],['Yearly income','num']]}],
  3:[{title:'Income',h:1,first:'Income Item',at:[15,365],cols:[['Income item','id'],['Yearly income','num']]},
@@ -128,7 +152,7 @@ const SECTIONS={
    td.textContent=emptyText||'No records yet.';tr.append(td);}
   for(const rec of records){
    const tr=el('tr','',body);tr.className='record-row';
-   const isSelf=mode===1&&!rec.cells[2];
+   const isSelf=mode===1&&!rec.cells[2]&&!/^your /i.test(rec.cells[0]?.text||'');
    section.cols.forEach((c,ci)=>{
     const td=el('td','',tr);if(c[1]==='num')td.classList.add('is-num');if(ci===0)td.classList.add('is-identity');
     const item=rec.cells[ci];
@@ -141,6 +165,80 @@ const SECTIONS={
    if(isSelf){const badge=el('span','You',tr.querySelector('td'));badge.className='you-badge';badge.title='Your kingdom';}
   }
   return wrap;
+ }
+ function kingdomRecords(){
+  const table=reportBody.querySelector('table.report-table');
+  if(!table)return [];
+  const cols=['Reputation','Diplomatic status','Can attack','Trade treaty','Trade amount'];
+  return [...table.querySelectorAll('tbody tr.record-row')].map(tr=>{
+   const tds=[...tr.querySelectorAll('td')];
+   const name=(tds[0]?.querySelector('.record-cell')?.textContent||tds[0]?.textContent||'').trim();
+   const pair={};cols.forEach((c,i)=>{const td=tds[i+1];pair[c]=td&&!td.classList.contains('is-empty')?(td.textContent||'').trim():null;});
+   return {name,pair,self:!!tds[0]?.querySelector('.you-badge')};
+  }).filter(r=>r.name);
+ }
+ function kingdomTabPanel(panel,records){
+  panel.replaceChildren();
+  const sel=kingdomView.selected?records.find(r=>r.name===kingdomView.selected):null;
+  const def=(list)=>{const dl=el('dl','',panel);dl.className='kingdom-facts';
+   for(const [k,v] of list){const d=el('div','',dl);el('dt',k,d);el('dd',v==null||v===''?'Not recorded':v,d);}return dl;};
+  if(kingdomView.tab==='information'){
+   if(!sel){const p=el('p','Select a kingdom row above to see its summary.',panel);p.className='kingdom-hint';return;}
+   el('h3',sel.name+(sel.self?' · your kingdom':''),panel).className='kingdom-panel-title';
+   def([['Reputation',sel.pair['Reputation']],['Diplomatic status',sel.pair['Diplomatic status']],['Can attack',sel.pair['Can attack']],['Trade treaty',sel.pair['Trade treaty']],['Trade amount',sel.pair['Trade amount']]]);
+   return;
+  }
+  if(kingdomView.tab==='diplomacy'){
+   if(!sel){const p=el('p','Select a kingdom above to review diplomacy.',panel);p.className='kingdom-hint';return;}
+   if(sel.self){const p=el('p','This is your own kingdom. Select a foreign kingdom to review diplomacy with it.',panel);p.className='kingdom-hint';return;}
+   el('h3','Diplomacy with '+sel.name,panel).className='kingdom-panel-title';
+   def([['Current status',sel.pair['Diplomatic status']],['Reputation',sel.pair['Reputation']],['Attack permission',sel.pair['Can attack']],['Trade treaty',sel.pair['Trade treaty']],['Trade amount',sel.pair['Trade amount']]]);
+   const note=el('p','',panel);note.className='kingdom-hint';
+   note.textContent='No diplomatic actions are available from this report. Treaty and war decisions are made through the game\u2019s own diplomacy screens; this page summarises the current relationship.';
+   return;
+  }
+  const events=newsLog.filter(line=>!sel||line.includes(sel.name));
+  if(!events.length){const p=el('p','No diplomatic events have occurred yet.',panel);p.className='empty-state';return;}
+  const list=el('ol','',panel);list.className='kingdom-events';
+  events.slice().reverse().forEach(line=>el('li',line,list));
+ }
+ function buildKingdomTabs(){
+  const root=el('section','',document.createDocumentFragment());root.className='kingdom-tabs';
+  const list=el('nav','',root);list.className='kingdom-tablist';list.setAttribute('role','tablist');list.setAttribute('aria-label','Kingdoms views');
+  const panel=el('div','',root);panel.className='kingdom-tabpanel';panel.id='kingdom-panel';panel.setAttribute('role','tabpanel');panel.tabIndex=0;
+  const defs=[['information','Information'],['diplomacy','Diplomacy'],['log','Diplomatic Log']];
+  const buttons=defs.map(([id,label])=>{
+   const b=el('button',label,list);b.type='button';b.className='kingdom-tab';b.id='kingdom-tab-'+id;
+   b.setAttribute('role','tab');b.setAttribute('aria-controls','kingdom-panel');
+   b.onclick=()=>{kingdomView.tab=id;paint();};
+   b.onkeydown=e=>{
+    const i=defs.findIndex(d=>d[0]===id);let n=null;
+    if(e.key==='ArrowRight')n=(i+1)%defs.length;else if(e.key==='ArrowLeft')n=(i+defs.length-1)%defs.length;
+    else if(e.key==='Home')n=0;else if(e.key==='End')n=defs.length-1;
+    if(n===null)return;e.preventDefault();kingdomView.tab=defs[n][0];paint();buttons[n].focus();
+   };
+   return b;
+  });
+  function paint(){
+   buttons.forEach((b,i)=>{const on=defs[i][0]===kingdomView.tab;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;b.classList.toggle('is-active',on);});
+   panel.setAttribute('aria-labelledby','kingdom-tab-'+kingdomView.tab);
+   kingdomTabPanel(panel,kingdomRecords());
+  }
+  paint();
+  return {root,paint};
+ }
+ function decorateKingdomRows(ui){
+  const table=reportBody.querySelector('table.report-table');
+  if(!table)return;
+  const trs=[...table.querySelectorAll('tbody tr.record-row')];
+  const mark=()=>trs.forEach(tr=>{const on=tr.dataset.kingdom===kingdomView.selected;tr.classList.toggle('is-selected',on);tr.setAttribute('aria-current',on?'true':'false');});
+  trs.forEach(tr=>{
+   const rec=kingdomRecords().find(r=>tr.textContent.startsWith(r.name));
+   if(!rec)return;
+   tr.dataset.kingdom=rec.name;
+   tr.addEventListener('click',()=>{kingdomView.selected=rec.name;mark();ui.paint();});
+  });
+  mark();
  }
  function renderNotes(row,frag){
   const line=el('p','',frag);line.className='report-note';
@@ -155,15 +253,15 @@ const SECTIONS={
   reportTitle.textContent=titles[snapshot.mode]||'Kingdom records';report.dataset.mode=snapshot.mode;hint.textContent=HELP[snapshot.mode]||DEFAULT_HELP;
   const texts=snapshot.texts.filter(t=>t.x<576&&t.y>=54&&t.y<600);
   const signature=JSON.stringify([snapshot.mode,texts,snapshot.buttons,snapshot.lists,sortState]);
+  endReportLoad(isEmptyReport(snapshot.mode,texts)?'empty':'ready');
   if(!force&&cache.report===signature)return;cache.report=signature;
-  report.removeAttribute('data-loading');report.setAttribute('aria-busy','false');
   const previousFocus=document.activeElement?.dataset?.recordKey;
   const frag=document.createDocumentFragment();
   const rows=rowsFrom(texts);
   const spec=SECTIONS[snapshot.mode];
   const tabLabels=['Information','Diplomacy','Diplomatic Log'];
   const tabRow=rows.find(r=>r.items.filter(i=>tabLabels.includes(i.text)).length>=2);
-  if(tabRow){const tabs=el('nav','',frag);tabs.className='report-tabs';tabs.setAttribute('aria-label','Kingdom Council sections');
+  if(tabRow&&snapshot.mode!==1){const tabs=el('nav','',frag);tabs.className='report-tabs';tabs.setAttribute('aria-label','Kingdom Council sections');
    tabRow.items.filter(i=>tabLabels.includes(i.text)).forEach(item=>{const tab=el('button',item.text,tabs);tab.className='report-tab';tab.onclick=()=>clickAt(item.x+3,item.y+2);});}
   const starts=[];
   if(spec)for(const [si,section] of spec.entries()){
@@ -173,14 +271,19 @@ const SECTIONS={
   const inBand=(r)=>starts.some(s=>Math.abs(r.y-s.y)<=(s.section.band||20));
   let active=null,activeRows=[];
   const rendered=new Set();
- const flush=()=>{if(active&&activeRows.length){frag.append(buildTable(snapshot.mode,active.si,active.section,activeRows));rendered.add(active.si);activeRows=[];}};
+ const pendingNotes=[];
+ const flush=()=>{
+  if(active&&activeRows.length){frag.append(buildTable(snapshot.mode,active.si,active.section,activeRows));rendered.add(active.si);activeRows=[];}
+  while(pendingNotes.length)renderNotes(pendingNotes.shift(),frag);
+ };
   for(const row of rows){
    if(tabRow&&row===tabRow)continue;
    if(inBand(row)){flush();active=starts.find(s=>Math.abs(row.y-s.y)<=(s.section.band||20));continue;}
    const firstText=(row.items.slice().sort((a,b)=>a.x-b.x)[0]?.text||'');
    const note=NOTE_RX[snapshot.mode]?.test(firstText)||row.items.length<2;
-   if(note){flush();renderNotes(row,frag);continue;}
-   if(!active||!spec){renderNotes(row,frag);continue;}
+   if(note){if(active&&active.section.endOn&&active.section.endOn.test(firstText)){flush();active=null;}pendingNotes.push(row);continue;}
+   if(!active||!spec){pendingNotes.push(row);continue;}
+   if(active.section.filter&&!active.section.filter(firstText)){pendingNotes.push(row);continue;}
    activeRows.push(row);
   }
   flush();
@@ -189,6 +292,11 @@ const SECTIONS={
    frag.append(buildTable(snapshot.mode,s.si,s.section,[],text));
    rendered.add(s.si);
   }
+  let kingdomUi=null;
+  if(snapshot.mode===1){
+   kingdomUi=buildKingdomTabs();
+   frag.append(kingdomUi.root);
+  }
   if(isEmptyReport(snapshot.mode,texts)&&!spec){const empty=el('p',EMPTY[snapshot.mode]||'No records to display for this kingdom.',frag);empty.className='empty-state';}
   const toolbar=el('div','',frag);toolbar.className='native-actions';
   for(const b of snapshot.buttons.filter(b=>b.x1<576&&b.y1>=54)){
@@ -196,6 +304,7 @@ const SECTIONS={
    const button=el('button',label,toolbar);button.disabled=!b.enabled;button.setAttribute('aria-pressed',String(!!b.pushed));button.onclick=()=>clickAt((b.x1+b.x2)/2,(b.y1+b.y2)/2);
   }
   reportBody.replaceChildren(frag);paging.replaceChildren();
+  if(kingdomUi){decorateKingdomRows(kingdomUi);kingdomUi.paint();}
   snapshot.lists.filter(l=>l.x1<576&&l.total>l.visible).forEach((l,index)=>{
    const box=el('div','',paging);el('span',(`List ${index+1} · ${l.selected} of ${l.total}`),box);
    for(const [label,y] of [['Previous records',l.y1+7],['Next records',l.y2-7]]){const b=el('button',label,box);b.onclick=()=>clickAt(l.x2-7,y);}
@@ -214,11 +323,11 @@ const news=el('aside','',document.body);news.id='siege-news';news.hidden=true;ne
 const tooltip=el('aside','',document.body);tooltip.id='siege-tooltip';tooltip.hidden=true;tooltip.setAttribute('role','tooltip');let tooltipTimer;
 window.siegePresentation={
  tooltip(title,description){tooltip.replaceChildren();el('strong',clean(title),tooltip);el('span',clean(description),tooltip);tooltip.hidden=false;clearTimeout(tooltipTimer);tooltipTimer=setTimeout(()=>tooltip.hidden=true,1800);},
- begin(kind,mode,reset=1){if(kind==='report'){report.dataset.loading='true';report.setAttribute('aria-busy','true');}current=!reset&&snapshots[kind]?{...snapshots[kind],texts:snapshots[kind].texts.map(t=>({...t})),buttons:snapshots[kind].buttons.map(b=>({...b})),lists:[]}:{kind,mode,texts:[],buttons:[],lists:[]};},
+ begin(kind,mode,reset=1){if(kind==='report')beginReportLoad(mode);current=!reset&&snapshots[kind]?{...snapshots[kind],texts:snapshots[kind].texts.map(t=>({...t})),buttons:snapshots[kind].buttons.map(b=>({...b})),lists:[]}:{kind,mode,texts:[],buttons:[],lists:[]};},
  text(x,y,h,text){if(!current)return;const value=clean(text);if(!value)return;const existing=current.texts.find(t=>t.x===x&&t.y===y);if(existing){existing.text=value;existing.h=h;}else current.texts.push({x,y,h,text:value});},
  button(x1,y1,x2,y2,text,enabled,pushed){if(!current)return;const b={x1,y1,x2,y2,text:clean(text),enabled,pushed};const idx=current.buttons.findIndex(v=>v.x1===x1&&v.y1===y1);if(idx<0)current.buttons.push(b);else current.buttons[idx]=b;},
  list(x1,y1,x2,y2,selected,total,visible){if(current)current.lists.push({x1,y1,x2,y2,selected,total,visible});},
- end(){if(!current)return;const snapshot=current;snapshots[snapshot.kind]=snapshot;current=null;if(snapshot.kind==='report')renderReport(snapshot);else if(snapshot.kind==='detail')renderDetail(snapshot);else if(snapshot.kind==='news'){const sig=JSON.stringify(snapshot.texts);if(cache.news!==sig){cache.news=sig;news.replaceChildren();for(const row of rowsFrom(snapshot.texts)){const b=el('button',row.items.map(t=>t.text).join(' '),news);b.onclick=()=>clickAt(10,row.y+2);}}news.hidden=!snapshot.texts.length;}else if(snapshot.kind==='ending'){ending.hidden=false;endTitle.textContent=({1:'Victory is yours',2:'A kingdom falls',3:'Your reign in review',4:'Hall of fame'})[snapshot.mode]||'Your legacy';endBody.replaceChildren();if(!snapshot.texts.length)el('p',snapshot.mode===1?'Your kingdom has achieved its victory goal. Review the story and final score of your reign.':'Your reign has ended. Review the chronicle, final statistics, and ranking of your kingdom.',endBody);for(const row of rowsFrom(snapshot.texts)){const line=el('div','',endBody);line.className='detail-record';row.items.forEach(t=>el('span',t.text,line));}continueEnd.focus();}},
+ end(){if(!current)return;const snapshot=current;snapshots[snapshot.kind]=snapshot;current=null;if(snapshot.kind==='report')renderReport(snapshot);else if(snapshot.kind==='detail')renderDetail(snapshot);else if(snapshot.kind==='news'){const sig=JSON.stringify(snapshot.texts);if(cache.news!==sig){cache.news=sig;news.replaceChildren();for(const row of rowsFrom(snapshot.texts)){const line=row.items.map(t=>t.text).join(' ');const b=el('button',line,news);b.onclick=()=>clickAt(10,row.y+2);if(line&&!newsLog.includes(line))newsLog.push(line);}}news.hidden=!snapshot.texts.length;}else if(snapshot.kind==='ending'){ending.hidden=false;endTitle.textContent=({1:'Victory is yours',2:'A kingdom falls',3:'Your reign in review',4:'Hall of fame'})[snapshot.mode]||'Your legacy';endBody.replaceChildren();if(!snapshot.texts.length)el('p',snapshot.mode===1?'Your kingdom has achieved its victory goal. Review the story and final score of your reign.':'Your reign has ended. Review the chronicle, final statistics, and ranking of your kingdom.',endBody);for(const row of rowsFrom(snapshot.texts)){const line=el('div','',endBody);line.className='detail-record';row.items.forEach(t=>el('span',t.text,line));}continueEnd.focus();}},
  closeEnding(){ending.hidden=true;},
  inspect(){return {reportMode:Number(report.dataset.mode||0),reportVisible:!report.hidden,detailVisible:!detail.hidden};}
 };

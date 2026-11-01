@@ -92,3 +92,42 @@ body:not(.siege-playing) #siege-canvas-veil{display:block}
  #siege-report .report-note{font-size:12.5px}
  #siege-report .report-table-title{font-size:14px;margin:14px 0 6px}
 }
+/* Report status: loading, error and retry. Distinct from empty state, never persists after render. */
+#siege-report .report-status{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:10px 0 14px;padding:10px 12px;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:8px;background:#16292e;color:var(--muted);font-size:13px;line-height:1.5}
+#siege-report .report-status[hidden]{display:none}
+#siege-report .report-status strong{color:var(--ink);font-weight:650}
+#siege-report .report-status-detail{color:var(--muted)}
+#siege-report[data-state=error] .report-status{border-left-color:#c2634f;background:#2a1d1c}
+#siege-report[data-state=error] .report-status strong{color:#f0c9bd}
+#siege-report .report-retry{min-height:44px;padding:8px 16px;border:1px solid var(--line);border-radius:8px;background:#1f383c;color:var(--ink);font:600 13px/1.2 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+#siege-report .report-retry:hover{background:#2a4449;color:#ffe0a3}
+#siege-report .report-retry:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+
+/* Kingdoms sub-views: Information · Diplomacy · Diplomatic Log. */
+#siege-report .kingdom-tabs{margin:4px 0 18px;border-top:1px solid var(--line);padding-top:12px}
+#siege-report .kingdom-tablist{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line)}
+#siege-report .kingdom-tab{min-height:44px;padding:8px 16px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);font:600 13px/1.2 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+#siege-report .kingdom-tab:hover{color:var(--ink);background:#1c3338}
+#siege-report .kingdom-tab[aria-selected=true]{color:var(--gold);border-bottom-color:var(--gold);background:#172d32}
+#siege-report .kingdom-tab:focus-visible{outline:3px solid var(--gold);outline-offset:-3px}
+#siege-report .kingdom-tabpanel{min-height:96px;padding:14px 2px 4px}
+#siege-report .kingdom-tabpanel:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+#siege-report .kingdom-panel-title{margin:0 0 10px;font:600 15px/1.3 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+#siege-report .kingdom-facts{display:grid;grid-template-columns:minmax(140px,auto) 1fr;gap:1px;margin:0 0 12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#siege-report .kingdom-facts div{display:contents}
+#siege-report .kingdom-facts dt{margin:0;padding:9px 12px;background:#172d32;color:var(--muted);font:600 12.5px/1.4 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;border-top:1px solid #24403f}
+#siege-report .kingdom-facts dd{margin:0;padding:9px 12px;background:#14282c;color:#e2eae2;font:500 13px/1.4 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;border-top:1px solid #24403f}
+#siege-report .kingdom-facts div:first-child dt,#siege-report .kingdom-facts div:first-child dd{border-top:0}
+#siege-report .kingdom-hint{margin:0;color:var(--muted);font-size:13px;line-height:1.55;max-width:64ch}
+#siege-report .kingdom-events{margin:0;padding-left:20px;color:#cfd9d1;font-size:13px;line-height:1.6}
+#siege-report .kingdom-events li{padding:6px 0;border-bottom:1px dotted #2a4545}
+#siege-report .kingdom-events li:last-child{border-bottom:0}
+#siege-report .report-table tbody tr.is-selected td{background:#25464a;box-shadow:inset 0 0 0 1px var(--gold)}
+#siege-report .report-table tbody tr.is-selected td.is-identity button.record-cell{color:#ffe0a3}
+@media(max-width:650px){
+ #siege-report .kingdom-tab{flex:1 1 auto;justify-content:center;text-align:center;min-height:44px;padding:8px 10px;font-size:12.5px}
+ #siege-report .kingdom-facts{grid-template-columns:1fr}
+ #siege-report .kingdom-facts dt{padding:8px 10px 2px;border-top:1px solid #24403f;background:#172d32}
+ #siege-report .kingdom-facts dd{padding:0 10px 9px}
+ #siege-report .report-status{font-size:12.5px;padding:9px 10px}
+}
