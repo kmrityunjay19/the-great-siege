@@ -1,0 +1,10 @@
+SDL ready; compiling 326 source files
+Compiled 50 / 326
+Compiled 100 / 326
+Compiled 150 / 326
+Compiled 200 / 326
+Compiled 250 / 326
+Compiled 300 / 326
+Linking WebAssembly
+Remember to build the main file with `-sFORCE_FILESYSTEM` so that it includes support for loading this file package
+Built /Users/mrityunjaykumar/Documents/Codex/2026-10-17/i-w/work/7kaa-web/build/7kaa.html

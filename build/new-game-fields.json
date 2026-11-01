@@ -1,0 +1,435 @@
+[
+  {
+    "name": "race_id",
+    "label": "Your civilization",
+    "group": "basic",
+    "options": [
+      [
+        6,
+        "Chinese"
+      ],
+      [
+        8,
+        "Egyptian"
+      ],
+      [
+        3,
+        "Greek"
+      ],
+      [
+        7,
+        "Japanese"
+      ],
+      [
+        2,
+        "Maya"
+      ],
+      [
+        9,
+        "Marathas"
+      ],
+      [
+        1,
+        "Norman"
+      ],
+      [
+        5,
+        "Persian"
+      ],
+      [
+        4,
+        "Viking"
+      ],
+      [
+        10,
+        "Zulu"
+      ]
+    ]
+  },
+  {
+    "name": "player_nation_color",
+    "label": "Kingdom color",
+    "group": "basic",
+    "options": [
+      [
+        1,
+        "Red"
+      ],
+      [
+        2,
+        "Blue"
+      ],
+      [
+        3,
+        "Green"
+      ],
+      [
+        4,
+        "Purple"
+      ],
+      [
+        5,
+        "Orange"
+      ],
+      [
+        6,
+        "Yellow"
+      ],
+      [
+        7,
+        "Brown"
+      ]
+    ]
+  },
+  {
+    "name": "difficulty_level",
+    "label": "Difficulty",
+    "group": "basic",
+    "options": [
+      [
+        0,
+        "Very easy"
+      ],
+      [
+        1,
+        "Easy"
+      ],
+      [
+        2,
+        "Medium"
+      ],
+      [
+        3,
+        "Hard"
+      ],
+      [
+        4,
+        "Very hard"
+      ],
+      [
+        5,
+        "Custom"
+      ]
+    ]
+  },
+  {
+    "name": "ai_nation_count",
+    "label": "Rival kingdoms",
+    "group": "basic",
+    "min": 1,
+    "max": 6
+  },
+  {
+    "name": "terrain_set",
+    "label": "Terrain",
+    "group": "basic",
+    "options": [
+      [
+        1,
+        "Standard"
+      ],
+      [
+        2,
+        "Snow"
+      ],
+      [
+        3,
+        "Badlands"
+      ]
+    ]
+  },
+  {
+    "name": "land_mass",
+    "label": "Land mass",
+    "group": "basic",
+    "options": [
+      [
+        1,
+        "Small"
+      ],
+      [
+        2,
+        "Medium"
+      ],
+      [
+        3,
+        "Large"
+      ]
+    ]
+  },
+  {
+    "name": "explore_whole_map",
+    "label": "Map starts explored",
+    "group": "world",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "fog_of_war",
+    "label": "Fog of war",
+    "group": "world",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "start_up_raw_site",
+    "label": "Raw-material sites",
+    "group": "world",
+    "min": 1,
+    "max": 10
+  },
+  {
+    "name": "start_up_has_mine_nearby",
+    "label": "A mine near your starting town",
+    "group": "world",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "start_up_independent_town",
+    "label": "Independent towns",
+    "group": "world",
+    "options": [
+      [
+        7,
+        "Few (7)"
+      ],
+      [
+        15,
+        "Some (15)"
+      ],
+      [
+        30,
+        "Many (30)"
+      ]
+    ]
+  },
+  {
+    "name": "independent_town_resistance",
+    "label": "Independent town resistance",
+    "group": "world",
+    "options": [
+      [
+        1,
+        "Low"
+      ],
+      [
+        2,
+        "Medium"
+      ],
+      [
+        3,
+        "High"
+      ]
+    ]
+  },
+  {
+    "name": "new_independent_town_emerge",
+    "label": "New independent towns can emerge",
+    "group": "world",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "new_nation_emerge",
+    "label": "New kingdoms can emerge",
+    "group": "world",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "random_event_frequency",
+    "label": "Random events",
+    "group": "world",
+    "options": [
+      [
+        0,
+        "Never"
+      ],
+      [
+        1,
+        "Occasional"
+      ],
+      [
+        2,
+        "Frequent"
+      ],
+      [
+        3,
+        "Very frequent"
+      ]
+    ]
+  },
+  {
+    "name": "monster_type",
+    "label": "Fryhtans",
+    "group": "world",
+    "options": [
+      [
+        0,
+        "None"
+      ],
+      [
+        1,
+        "Defensive"
+      ],
+      [
+        2,
+        "Offensive"
+      ]
+    ]
+  },
+  {
+    "name": "random_start_up",
+    "label": "Randomize starting positions",
+    "group": "world",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "start_up_cash",
+    "label": "Your starting treasure",
+    "group": "economy",
+    "options": [
+      [
+        1,
+        "Small"
+      ],
+      [
+        2,
+        "Medium"
+      ],
+      [
+        3,
+        "Large"
+      ],
+      [
+        4,
+        "Very large"
+      ]
+    ]
+  },
+  {
+    "name": "ai_start_up_cash",
+    "label": "Rival starting treasure",
+    "group": "economy",
+    "options": [
+      [
+        1,
+        "Small"
+      ],
+      [
+        2,
+        "Medium"
+      ],
+      [
+        3,
+        "Large"
+      ],
+      [
+        4,
+        "Very large"
+      ]
+    ]
+  },
+  {
+    "name": "ai_aggressiveness",
+    "label": "Rival aggression",
+    "group": "economy",
+    "options": [
+      [
+        1,
+        "Low"
+      ],
+      [
+        2,
+        "Medium"
+      ],
+      [
+        3,
+        "High"
+      ],
+      [
+        4,
+        "Very high"
+      ]
+    ]
+  },
+  {
+    "name": "goal_destroy_monster",
+    "label": "Defeat all Fryhtans",
+    "group": "goals",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "goal_population_flag",
+    "label": "Population goal enabled",
+    "group": "goals",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "goal_population",
+    "label": "Population target",
+    "group": "goals",
+    "min": 100,
+    "max": 5000,
+    "step": 100
+  },
+  {
+    "name": "goal_economic_score_flag",
+    "label": "Economic score goal enabled",
+    "group": "goals",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "goal_economic_score",
+    "label": "Economic score target",
+    "group": "goals",
+    "min": 100,
+    "max": 5000,
+    "step": 100
+  },
+  {
+    "name": "goal_total_score_flag",
+    "label": "Total score goal enabled",
+    "group": "goals",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "goal_total_score",
+    "label": "Total score target",
+    "group": "goals",
+    "min": 100,
+    "max": 10000,
+    "step": 100
+  },
+  {
+    "name": "goal_year_limit_flag",
+    "label": "Year limit enabled",
+    "group": "goals",
+    "min": 0,
+    "max": 1,
+    "toggle": true
+  },
+  {
+    "name": "goal_year_limit",
+    "label": "Year limit",
+    "group": "goals",
+    "min": 1,
+    "max": 100
+  }
+]
